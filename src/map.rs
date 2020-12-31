@@ -414,4 +414,33 @@ mod tests {
             }
         });
     }
+
+    #[test]
+    fn traversals() {
+        //TODO: This test is brittle and relies on insertion behaviour. Really we want to encode the
+        // shape of the tree in the test itself. Maybe with some unsafe `with_tree_structure`
+        // constructor for BSTMap or something.
+
+        let mut map = BSTMap::new();
+        // Create the following tree:
+        //      4
+        //   2     5
+        // 1   3
+        //
+        // Inserting the tree one level at a time so it makes this shape:
+        map.insert(4, 4);
+        map.insert(5, 5);
+        map.insert(2, 2);
+        map.insert(3, 3);
+        map.insert(1, 1);
+
+        let values: Vec<_> = map.iter_preorder().map(|(k, _)| *k).collect();
+        assert_eq!(&values, &[4, 2, 1, 3, 5]);
+
+        let values: Vec<_> = map.iter_inorder().map(|(k, _)| *k).collect();
+        assert_eq!(&values, &[1, 2, 3, 4, 5]);
+
+        let values: Vec<_> = map.iter_postorder().map(|(k, _)| *k).collect();
+        assert_eq!(&values, &[1, 3, 2, 5, 4]);
+    }
 }
