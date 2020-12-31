@@ -157,6 +157,11 @@ impl<K: Ord, V> BSTMap<K, V> {
         todo!()
     }
 
+    /// Clears the map, removing all elements
+    pub fn clear(&mut self) {
+        *self = Self::new();
+    }
+
     /// Performs a pre-order traversal of the tree
     pub fn iter_preorder(&self) -> PreorderIter<K, V> {
         PreorderIter::new(&self.nodes, self.root)
