@@ -77,4 +77,5 @@ fn main() {
     - [ ] `entry`
     - [ ] `keys` / `values` / `values_mut` - might not be needed? arbitrary order?
     - [ ] self-balancing via AVL or red/black or something else
+    - [ ] proper `Debug` impls for all public types
 - [ ] `BSTSet` - implemented as an API over `BSTMap<K, ()>`

@@ -1,15 +1,30 @@
 use std::mem;
+use std::fmt;
 
 use super::{InnerNode, index::NodeIndex, push_node};
 
 /// A single node of the binary search tree
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct BSTNode<'a, K, V> {
     nodes: &'a [InnerNode<K, V>],
     /// An index into `nodes` for the node represented by this struct
     ///
     /// Guaranteed to be a valid index
     index: usize,
+}
+
+impl<'a, K, V> fmt::Debug for BSTNode<'a, K, V>
+    where K: Ord + fmt::Debug,
+          V: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BSTNode")
+            .field("key", self.key())
+            .field("value", self.value())
+            .field("left", &self.left())
+            .field("right", &self.right())
+            .finish()
+    }
 }
 
 impl<'a, K: Ord, V> BSTNode<'a, K, V> {
@@ -64,13 +79,27 @@ impl<'a, K: Ord, V> BSTNode<'a, K, V> {
 ///
 /// Note that only the value is mutable, not the key since modifying the key
 /// could result in invalidating the ordering properties.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct BSTNodeMut<'a, K, V> {
     nodes: &'a mut Vec<InnerNode<K, V>>,
     /// An index into `nodes` for the node represented by this struct
     ///
     /// Guaranteed to be a valid index
     index: usize,
+}
+
+impl<'a, K, V> fmt::Debug for BSTNodeMut<'a, K, V>
+    where K: Ord + fmt::Debug,
+          V: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BSTNode")
+            .field("key", self.key())
+            .field("value", self.value())
+            .field("left", &"...")
+            .field("right", &"...")
+            .finish()
+    }
 }
 
 impl<'a, K: Ord, V> BSTNodeMut<'a, K, V> {
