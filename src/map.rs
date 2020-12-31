@@ -151,6 +151,12 @@ impl<K: Ord, V> BSTMap<K, V> {
         None
     }
 
+    /// Removes a key from the map, returning the value at the key if the key was previously in the
+    /// map.
+    pub fn remove(&mut self, _key: &K) -> Option<V> {
+        todo!()
+    }
+
     /// Performs a pre-order traversal of the tree
     pub fn iter_preorder(&self) -> PreorderIter<K, V> {
         PreorderIter::new(&self.nodes, self.root)
