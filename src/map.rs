@@ -444,4 +444,45 @@ mod tests {
         let values: Vec<_> = map.iter_postorder().map(|(k, _)| *k).collect();
         assert_eq!(&values, &[1, 3, 2, 5, 4]);
     }
+
+    #[test]
+    fn test_custom_traversal() {
+        #[derive(Debug, PartialEq, Eq)]
+        struct Stats {
+            pub score: u32,
+        }
+
+        // Custom traversal through the values in the map
+        fn find_score(node: Option<BSTNode<i32, Stats>>, target_score: u32) -> Option<BSTNode<i32, Stats>> {
+            let node = node?;
+            if node.value().score == target_score {
+                Some(node)
+            } else {
+                // Recurse through left and right subtrees, just like you would in a GC'd language!
+                find_score(node.left(), target_score)
+                    .or_else(|| find_score(node.right(), target_score))
+            }
+        }
+
+        let mut map = BSTMap::new();
+
+        map.insert(1, Stats {
+            score: 39382,
+        });
+        map.insert(0, Stats {
+            score: 400,
+        });
+        map.insert(40, Stats {
+            score: 999,
+        });
+        map.insert(42, Stats {
+            score: 33,
+        });
+
+        // Find the node with score == 500
+        assert_eq!(find_score(map.root(), 500), None);
+        assert_eq!(find_score(map.root(), 39382).map(|node| *node.key()), Some(1));
+        assert_eq!(find_score(map.root(), 999).map(|node| *node.key()), Some(40));
+        assert_eq!(find_score(map.root(), 33).map(|node| *node.key()), Some(42));
+    }
 }
