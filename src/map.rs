@@ -10,6 +10,7 @@ pub use inorder::*;
 pub use postorder::*;
 
 use std::cmp::Ordering;
+use std::borrow::Borrow;
 
 use index::NodeIndex;
 
@@ -77,14 +78,20 @@ impl<K: Ord, V> BSTMap<K, V> {
         self.nodes.is_empty()
     }
 
-    /// Returns a reference to the value corresponding to the given key, or
-    /// `None` if no such key exists in the binary search tree
+    /// Returns a reference to the value corresponding to the given key, or `None` if no such key
+    /// exists in the binary search tree
+    ///
+    /// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
+    /// form must match the ordering on the key type.
     ///
     /// Time complexity: `O(log n)`
-    pub fn get(&self, key: &K) -> Option<&V> {
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
+        where K: Borrow<Q>,
+              Q: Ord + ?Sized,
+    {
         let mut current = self.root();
         while let Some(node) = current {
-            match node.key().cmp(key) {
+            match node.key().borrow().cmp(key) {
                 Ordering::Less => current = node.left(),
                 Ordering::Greater => current = node.right(),
                 Ordering::Equal => return Some(node.value()),
@@ -94,14 +101,20 @@ impl<K: Ord, V> BSTMap<K, V> {
         None
     }
 
-    /// Returns a mutable reference to the value corresponding to the given
-    /// key, or `None` if no such key exists in the binary search tree
+    /// Returns a mutable reference to the value corresponding to the given key, or `None` if no
+    /// such key exists in the binary search tree
+    ///
+    /// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
+    /// form must match the ordering on the key type.
     ///
     /// Time complexity: `O(log n)`
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+    pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
+        where K: Borrow<Q>,
+              Q: Ord + ?Sized,
+    {
         let mut current = self.root_mut();
         while let Some(node) = current.take() {
-            match node.key().cmp(key) {
+            match node.key().borrow().cmp(key) {
                 Ordering::Less => current = node.left(),
                 Ordering::Greater => current = node.right(),
                 Ordering::Equal => return Some(node.into_value_mut()),
@@ -153,7 +166,10 @@ impl<K: Ord, V> BSTMap<K, V> {
 
     /// Removes a key from the map, returning the value at the key if the key was previously in the
     /// map.
-    pub fn remove(&mut self, _key: &K) -> Option<V> {
+    pub fn remove<Q>(&mut self, _key: &Q) -> Option<V>
+        where K: Borrow<Q>,
+              Q: Ord + ?Sized,
+    {
         todo!()
     }
 
