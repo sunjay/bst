@@ -78,4 +78,5 @@ fn main() {
     - [ ] `keys` / `values` / `values_mut` - might not be needed? arbitrary order?
     - [ ] self-balancing via AVL or red/black or something else
     - [ ] proper `Debug` impls for all public types
+    - [ ] implement other traits from `std::iter` on iterators (e.g. `ExactSizeIterator` or `FusedIterator`)
 - [ ] `BSTSet` - implemented as an API over `BSTMap<K, ()>`
