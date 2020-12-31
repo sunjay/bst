@@ -254,6 +254,11 @@ impl<K: Ord, V> BSTMap<K, V> {
 mod tests {
     use super::*;
 
+    use std::collections::HashMap;
+
+    use rayon::prelude::*;
+    use rand::prelude::*;
+
     #[test]
     fn test_map_insert_get() {
         let mut map = BSTMap::new();
@@ -318,5 +323,95 @@ mod tests {
         assert_eq!(map.get("abc"), Some(&1));
         assert_eq!(map.get("COOL"), Some(&3));
         assert_eq!(map.get(""), Some(&898989));
+    }
+
+    #[test]
+    fn test_random_operations() {
+        const TEST_CASES: usize = 1024;
+        const OPERATIONS: usize = 128;
+
+        (0..TEST_CASES).into_par_iter().for_each(|_| {
+            let mut map = BSTMap::new();
+            // Compare against a HashMap
+            let mut expected = HashMap::new();
+            // The list of keys that have been inserted
+            let mut keys = Vec::new();
+
+            let mut rng = rand::thread_rng();
+            for _ in 0..rng.gen_range(OPERATIONS..=OPERATIONS*2) {
+                assert_eq!(map.is_empty(), expected.is_empty());
+                assert_eq!(map.len(), expected.len());
+
+                match rng.gen_range(1..=100) {
+                    // Check for a key that hasn't been inserted
+                    1..=10 => {
+                        // Not inserting any negative numbers
+                        let key = -rng.gen_range(1..=64);
+                        assert_eq!(map.get(&key), expected.get(&key));
+                        assert_eq!(map.get_mut(&key), expected.get_mut(&key));
+                    },
+
+                    // Check for a key that has been inserted
+                    11..=30 => {
+                        let key = match keys.choose(&mut rng).copied() {
+                            Some(key) => key,
+                            None => continue,
+                        };
+                        assert_eq!(map.get(&key), expected.get(&key));
+                        assert_eq!(map.get_mut(&key), expected.get_mut(&key));
+                    },
+
+                    // Modify an existing key
+                    31..=50 => {
+                        let key = match keys.choose(&mut rng).copied() {
+                            Some(key) => key,
+                            None => continue,
+                        };
+                        let value = rng.gen_range(100..=200);
+
+                        assert_eq!(map.get(&key), expected.get(&key));
+                        // Unwrap is safe because we're selected from the list of existing keys
+                        *map.get_mut(&key).unwrap() = value;
+                        *expected.get_mut(&key).unwrap() = value;
+                        assert_eq!(map.get(&key), expected.get(&key));
+                        assert_eq!(map.get_mut(&key), expected.get_mut(&key));
+                    },
+
+                    // Insert a key
+                    51..=100 => {
+                        // Only inserting positive values
+                        let key = rng.gen_range(0..=64);
+                        let value = rng.gen_range(100..=200);
+                        keys.push(key);
+
+                        assert_eq!(map.get(&key), expected.get(&key));
+                        assert_eq!(map.get_mut(&key), expected.get_mut(&key));
+                        assert_eq!(map.insert(key, value), expected.insert(key, value));
+                        assert_eq!(map.get(&key), expected.get(&key));
+                        assert_eq!(map.get_mut(&key), expected.get_mut(&key));
+                    },
+
+                    //TODO: Test `remove()`
+
+                    _ => unreachable!(),
+                }
+            }
+
+            for &key in &keys {
+                assert_eq!(map.get(&key), expected.get(&key));
+                assert_eq!(map.get_mut(&key), expected.get_mut(&key));
+            }
+
+            map.clear();
+            expected.clear();
+
+            assert_eq!(map.is_empty(), expected.is_empty());
+            assert_eq!(map.len(), expected.len());
+
+            for &key in &keys {
+                assert_eq!(map.get(&key), expected.get(&key));
+                assert_eq!(map.get_mut(&key), expected.get_mut(&key));
+            }
+        });
     }
 }
