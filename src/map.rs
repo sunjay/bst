@@ -43,12 +43,13 @@ fn push_node<K, V>(nodes: &mut Vec<InnerNode<K, V>>, key: K, value: V) -> NodeIn
 ///
 /// BST properties: For each node with key `k`:
 /// - The value of the key of each node in the left subtree is less than `k`
-/// - The value of the key of each node in the right subtree is greater than
-///   or equal to `k`
+/// - The value of the key of each node in the right subtree is greater than `k`
 ///
-/// The tree is not guaranteed to be structured or balanced in any particular
-/// way. The implementation may structure the tree however is needed to fulfill
-/// the BST properties.
+/// Duplicate keys are not allowed. Inserting a key that already exists in the map updates the
+/// previous value.
+///
+/// The tree is not guaranteed to be structured or balanced in any particular way. The
+/// implementation may structure the tree however is needed to fulfill the BST properties.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BSTMap<K, V> {
     nodes: Vec<InnerNode<K, V>>,
