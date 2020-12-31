@@ -266,6 +266,38 @@ mod tests {
         assert_eq!(map.insert(4, -2), None);
         assert_eq!(map.get(&3), Some(&1));
         assert_eq!(map.get(&4), Some(&-2));
+
+        assert_eq!(map.get(&0), None);
+        assert_eq!(map.insert(0, 44), None);
+        assert_eq!(map.get(&3), Some(&1));
+        assert_eq!(map.get(&4), Some(&-2));
+        assert_eq!(map.get(&0), Some(&44));
+    }
+
+    #[test]
+    fn test_map_insert_replace() {
+        let mut map = BSTMap::new();
+
+        assert_eq!(map.get(&3), None);
+        assert_eq!(map.insert(3, 1), None);
+        assert_eq!(map.get(&3), Some(&1));
+
+        assert_eq!(map.get(&4), None);
+        assert_eq!(map.insert(4, -2), None);
+        assert_eq!(map.get(&3), Some(&1));
+        assert_eq!(map.get(&4), Some(&-2));
+
+        assert_eq!(map.insert(3, 933), Some(1));
+        assert_eq!(map.get(&3), Some(&933));
+        assert_eq!(map.get(&4), Some(&-2));
+
+        assert_eq!(map.insert(3, 11), Some(933));
+        assert_eq!(map.get(&3), Some(&11));
+        assert_eq!(map.get(&4), Some(&-2));
+
+        assert_eq!(map.insert(4, 3), Some(-2));
+        assert_eq!(map.get(&3), Some(&11));
+        assert_eq!(map.get(&4), Some(&3));
     }
 
     #[test]
