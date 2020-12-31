@@ -33,6 +33,12 @@ impl<K, V> InnerNode<K, V> {
     }
 }
 
+fn push_node<K, V>(nodes: &mut Vec<InnerNode<K, V>>, key: K, value: V) -> NodeIndex {
+    let index = nodes.len();
+    nodes.push(InnerNode::new(key, value));
+    NodeIndex::new(index).expect("cannot have more than usize::MAX - 1 nodes")
+}
+
 /// A binary search tree (BST)
 ///
 /// BST properties: For each node with key `k`:
@@ -129,16 +135,21 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// Returns the previous value if the key was already present in an
     /// existing node or `None` if a new node was inserted.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        let mut current = self.root_mut();
+        let mut current = match self.root_mut() {
+            Some(root) => Some(root),
+            None => {
+                let index = push_node(&mut self.nodes, key, value);
+                self.root = index;
+                return None;
+            },
+        };
+
         while let Some(mut node) = current.take() {
             match node.key().cmp(&key) {
                 Ordering::Less => {
                     // Key not found, insert where we stopped
-                    if node.has_left() {
-                        let index = node.push_left(key, value);
-                        if self.root.is_none() {
-                            self.root = index;
-                        }
+                    if !node.has_left() {
+                        node.push_left(key, value);
                         break;
                     }
                     current = node.left();
@@ -146,7 +157,7 @@ impl<K: Ord, V> BSTMap<K, V> {
 
                 Ordering::Greater => {
                     // Key not found, insert where we stopped
-                    if node.has_right() {
+                    if !node.has_right() {
                         node.push_right(key, value);
                         break;
                     }
@@ -236,5 +247,44 @@ impl<K: Ord, V> BSTMap<K, V> {
     pub fn root_mut(&mut self) -> Option<BSTNodeMut<K, V>> {
         // Safety: `self.root` is a valid index into `self.nodes`
         unsafe { BSTNodeMut::new(&mut self.nodes, self.root) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_insert_get() {
+        let mut map = BSTMap::new();
+
+        assert_eq!(map.get(&3), None);
+        assert_eq!(map.insert(3, 1), None);
+        assert_eq!(map.get(&3), Some(&1));
+
+        assert_eq!(map.get(&4), None);
+        assert_eq!(map.insert(4, -2), None);
+        assert_eq!(map.get(&3), Some(&1));
+        assert_eq!(map.get(&4), Some(&-2));
+    }
+
+    #[test]
+    fn test_map_insert_get_borrow() {
+        let mut map: BSTMap<String, _> = BSTMap::new();
+
+        assert_eq!(map.get("abc"), None);
+        assert_eq!(map.insert("abc".to_string(), 1), None);
+        assert_eq!(map.get("abc"), Some(&1));
+
+        assert_eq!(map.get("COOL"), None);
+        assert_eq!(map.insert("COOL".to_string(), 3), None);
+        assert_eq!(map.get("abc"), Some(&1));
+        assert_eq!(map.get("COOL"), Some(&3));
+
+        assert_eq!(map.get(""), None);
+        assert_eq!(map.insert("".to_string(), 898989), None);
+        assert_eq!(map.get("abc"), Some(&1));
+        assert_eq!(map.get("COOL"), Some(&3));
+        assert_eq!(map.get(""), Some(&898989));
     }
 }

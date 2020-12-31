@@ -1,6 +1,6 @@
 use std::mem;
 
-use super::{InnerNode, index::NodeIndex};
+use super::{InnerNode, index::NodeIndex, push_node};
 
 /// A single node of the binary search tree
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,10 +167,4 @@ impl<'a, K: Ord, V> BSTNodeMut<'a, K, V> {
         // Safety: `self.index` is guaranteed to be a valid index
         unsafe { self.nodes.get_unchecked_mut(self.index) }
     }
-}
-
-fn push_node<K, V>(nodes: &mut Vec<InnerNode<K, V>>, key: K, value: V) -> NodeIndex {
-    let index = nodes.len();
-    nodes.push(InnerNode::new(key, value));
-    NodeIndex::new(index).expect("cannot have more than usize::MAX - 1 nodes")
 }
