@@ -97,7 +97,7 @@ impl<K: Ord, V> BSTMap<K, V> {
     {
         let mut current = self.root();
         while let Some(node) = current {
-            match node.key().borrow().cmp(key) {
+            match key.cmp(node.key().borrow()) {
                 Ordering::Less => current = node.left(),
                 Ordering::Greater => current = node.right(),
                 Ordering::Equal => return Some(node.value()),
@@ -120,7 +120,7 @@ impl<K: Ord, V> BSTMap<K, V> {
     {
         let mut current = self.root_mut();
         while let Some(node) = current.take() {
-            match node.key().borrow().cmp(key) {
+            match key.cmp(node.key().borrow()) {
                 Ordering::Less => current = node.left(),
                 Ordering::Greater => current = node.right(),
                 Ordering::Equal => return Some(node.into_value_mut()),
@@ -145,7 +145,7 @@ impl<K: Ord, V> BSTMap<K, V> {
         };
 
         while let Some(mut node) = current.take() {
-            match node.key().cmp(&key) {
+            match key.cmp(node.key().borrow()) {
                 Ordering::Less => {
                     // Key not found, insert where we stopped
                     if !node.has_left() {
