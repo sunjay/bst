@@ -72,11 +72,13 @@ fn main() {
     - [ ] `iter_mut_postorder` - post-order traversal (mutable)
     - [x] `root` - returns the root node of the tree and allows you to traverse all nodes
     - [x] `root_mut` - returns the root node of the tree and allows you to traverse all nodes (mutable)
+        - [ ] fix `left` and `right` methods so they take `&mut self` instead of `self`
+    - [ ] impl `FromIterator`
     - [ ] `extend` - `Extend` trait
     - [ ] `append`
     - [ ] `entry`
     - [ ] `keys` / `values` / `values_mut` - might not be needed? arbitrary order?
     - [ ] self-balancing via AVL or red/black or something else
-    - [ ] proper `Debug` impls for all public types
-    - [ ] implement other traits from `std::iter` on iterators (e.g. `ExactSizeIterator` or `FusedIterator`)
+    - [ ] proper `Debug` impls for all public types (don't expose implementation details)
+    - [x] implement other traits from `std::iter` on iterators (e.g. `ExactSizeIterator` or `FusedIterator`)
 - [ ] `BSTSet` - implemented as an API over `BSTMap<K, ()>`

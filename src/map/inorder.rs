@@ -1,3 +1,5 @@
+use std::iter::FusedIterator;
+
 use super::{InnerNode, index::NodeIndex};
 
 #[derive(Debug)]
@@ -42,3 +44,11 @@ impl<'a, K, V> Iterator for InorderIter<'a, K, V> {
         Some((&node.key, &node.value))
     }
 }
+
+impl<'a, K, V> ExactSizeIterator for InorderIter<'a, K, V> {
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+}
+
+impl<'a, K, V> FusedIterator for InorderIter<'a, K, V> {}
