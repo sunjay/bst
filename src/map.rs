@@ -70,6 +70,13 @@ impl<K: Ord, V> BSTMap<K, V> {
     ///
     /// The map is initially created with a capacity of 0, so it will not allocate until it is first
     /// inserted into.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    /// let mut map: BSTMap<&str, i32> = BSTMap::new();
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
@@ -78,6 +85,13 @@ impl<K: Ord, V> BSTMap<K, V> {
     ///
     /// The map will be able to hold at least `capacity` elements without reallocating. If
     /// `capacity` is 0, the map will not allocate.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    /// let mut map: BSTMap<&str, i32> = BSTMap::with_capacity(10);
+    /// ```
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             nodes: Vec::with_capacity(capacity),
@@ -88,6 +102,17 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// Returns the number of nodes in the tree
     ///
     /// Time complexity: `O(1)`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// assert_eq!(map.len(), 0);
+    /// map.insert(1, "a");
+    /// assert_eq!(map.len(), 1);
+    /// ```
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
@@ -95,6 +120,17 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// Returns true if the tree is empty
     ///
     /// Time complexity: `O(1)`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// assert!(map.is_empty());
+    /// map.insert(1, "a");
+    /// assert!(!map.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         debug_assert!(self.nodes.is_empty() == self.root.is_none());
         self.nodes.is_empty()
@@ -106,6 +142,17 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// form must match the ordering on the key type.
     ///
     /// Time complexity: `O(log n)`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// map.insert(1, "a");
+    /// assert_eq!(map.contains_key(&1), true);
+    /// assert_eq!(map.contains_key(&2), false);
+    /// ```
     pub fn contains_key<Q>(&self, key: &Q) -> bool
         where K: Borrow<Q>,
               Q: Ord + ?Sized,
@@ -129,6 +176,17 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// form must match the ordering on the key type.
     ///
     /// Time complexity: `O(log n)`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// map.insert(1, "a");
+    /// assert_eq!(map.get(&1), Some(&"a"));
+    /// assert_eq!(map.get(&2), None);
+    /// ```
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
         where K: Borrow<Q>,
               Q: Ord + ?Sized,
@@ -152,6 +210,22 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// form must match the ordering on the key type.
     ///
     /// Time complexity: `O(log n)`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// map.insert(1, "a");
+    /// assert_eq!(map.get(&1), Some(&"a"));
+    /// if let Some(x) = map.get_mut(&1) {
+    ///     *x = "b";
+    /// }
+    /// assert_eq!(map.get(&1), Some(&"b"));
+    ///
+    /// assert_eq!(map.get_mut(&2), None);
+    /// ```
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
         where K: Borrow<Q>,
               Q: Ord + ?Sized,
@@ -172,6 +246,21 @@ impl<K: Ord, V> BSTMap<K, V> {
     ///
     /// Returns the previous value if the key was already present in an
     /// existing node or `None` if a new node was inserted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// # assert!(map.is_empty());
+    /// assert_eq!(map.insert(37, "a"), None);
+    /// assert!(!map.is_empty());
+    ///
+    /// map.insert(37, "b");
+    /// assert_eq!(map.insert(37, "c"), Some("b"));
+    /// assert_eq!(map.get(&37), Some(&"c"));
+    /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let mut current = match self.root_mut() {
             Some(root) => Some(root),
@@ -215,14 +304,38 @@ impl<K: Ord, V> BSTMap<K, V> {
 
     /// Removes a key from the map, returning the value at the key if the key was previously in the
     /// map.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// map.insert(1, "a");
+    /// assert_eq!(map.remove(&1), Some("a"));
+    /// assert_eq!(map.remove(&1), None);
+    /// ```
     pub fn remove<Q>(&mut self, _key: &Q) -> Option<V>
         where K: Borrow<Q>,
               Q: Ord + ?Sized,
     {
+        //TODO: Re-enable doctest for this method
         todo!()
     }
 
     /// Clears the map, removing all elements
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// map.insert(1, "a");
+    /// assert!(!map.is_empty());
+    /// map.clear();
+    /// assert!(map.is_empty());
+    /// ```
     pub fn clear(&mut self) {
         *self = Self::new();
     }
@@ -267,6 +380,43 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// This is a low-level API meant to be used for implementing traversals.
     /// The inner structure of the tree can be anything that satisfies the
     /// BST properties.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use bst::{BSTMap, map::BSTNode};
+    ///
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Stats {
+    ///     pub score: u32,
+    ///     // ...other fields...
+    /// }
+    ///
+    /// // Custom traversal through the values in the map
+    /// fn find_score(node: Option<BSTNode<i32, Stats>>, target_score: u32) -> Option<BSTNode<i32, Stats>> {
+    ///     let node = node?;
+    ///     if node.value().score == target_score {
+    ///         Some(node)
+    ///     } else {
+    ///         // Recurse through left and right subtrees, just like you would in a GC'd language!
+    ///         find_score(node.left(), target_score)
+    ///             .or_else(|| find_score(node.right(), target_score))
+    ///     }
+    /// }
+    ///
+    /// fn main() {
+    ///     let mut map = BSTMap::new();
+    ///
+    ///     map.insert(1, Stats {
+    ///         score: 39382,
+    ///         // ...other fields...
+    ///     });
+    ///     // ...more insertions...
+    ///
+    ///     // Find the node with score == 500
+    ///     println!("{:?}", find_score(map.root(), 500));
+    /// }
+    /// ```
     pub fn root(&self) -> Option<BSTNode<K, V>> {
         // Safety: `self.root` is a valid index into `self.nodes`
         unsafe { BSTNode::new(&self.nodes, self.root) }

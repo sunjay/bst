@@ -14,7 +14,7 @@ collected language, but without the extra overhead and with all the usual protec
 borrow checker.
 
 ```rust
-use bst::BSTMap;
+use bst::{BSTMap, map::BSTNode};
 
 #[derive(Debug, PartialEq, Eq)]
 struct Stats {
