@@ -93,7 +93,7 @@ impl<'a, K, V> fmt::Debug for BSTNodeMut<'a, K, V>
           V: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BSTNode")
+        f.debug_struct("BSTNodeMut")
             .field("key", self.key())
             .field("value", self.value())
             .field("left", &"...")
