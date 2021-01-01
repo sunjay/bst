@@ -8,7 +8,7 @@ pub struct PostorderIter<'a, K, V> {
     stack: Vec<usize>,
 }
 
-// See: top_index
+// See: https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/
 impl<'a, K, V> PostorderIter<'a, K, V> {
     pub(super) fn new(nodes: &'a [InnerNode<K, V>], root: NodeIndex) -> Self {
         let mut stack = Vec::new();
