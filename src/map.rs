@@ -117,6 +117,24 @@ impl<K: Ord, V> BSTMap<K, V> {
         self.nodes.len()
     }
 
+    /// Returns the number of elements the map can hold without reallocating.
+    ///
+    /// This number is a lower bound; the map might be able to hold more, but is guaranteed to be
+    /// able to hold at least this many.
+    ///
+    /// Time complexity: `O(1)`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    /// let mut map: BSTMap<&str, i32> = BSTMap::with_capacity(100);
+    /// assert!(map.capacity() >= 100);
+    /// ```
+    pub fn capacity(&self) -> usize {
+        self.nodes.capacity()
+    }
+
     /// Returns true if the tree is empty
     ///
     /// Time complexity: `O(1)`

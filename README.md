@@ -53,6 +53,7 @@ fn main() {
 - [ ] `BSTMap`
     - [x] `new` / `default`
     - [x] `with_capacity`
+    - [x] `capacity`
     - [x] `reserve`
     - [x] `shrink_to_fit`
     - [x] `len` / `is_empty`
