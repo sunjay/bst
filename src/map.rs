@@ -66,8 +66,23 @@ impl<K, V> Default for BSTMap<K, V> {
 }
 
 impl<K: Ord, V> BSTMap<K, V> {
+    /// Creates an empty `BSTMap`
+    ///
+    /// The map is initially created with a capacity of 0, so it will not allocate until it is first
+    /// inserted into.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates an empty map with the specified capacity.
+    ///
+    /// The map will be able to hold at least `capacity` elements without reallocating. If
+    /// `capacity` is 0, the map will not allocate.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            nodes: Vec::with_capacity(capacity),
+            ..Self::default()
+        }
     }
 
     /// Returns the number of nodes in the tree
@@ -248,6 +263,23 @@ impl<K: Ord, V> BSTMap<K, V> {
     pub fn root_mut(&mut self) -> Option<BSTNodeMut<K, V>> {
         // Safety: `self.root` is a valid index into `self.nodes`
         unsafe { BSTNodeMut::new(&mut self.nodes, self.root) }
+    }
+
+    /// Reserves capacity for at least `additional` more elements to be inserted in the map. The
+    /// collection may reserve more space to avoid frequent reallocations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the new allocation size overflows `usize`.
+    pub fn reserve(&mut self, additional: usize) {
+        self.nodes.reserve(additional)
+    }
+
+    /// Shrinks the capacity of the map as much as possible. It will drop down as much as possible
+    /// while maintaining the internal rules and possibly leaving some space in accordance with the
+    /// resize policy.
+    pub fn shrink_to_fit(&mut self) {
+        self.nodes.shrink_to_fit()
     }
 }
 

@@ -52,9 +52,9 @@ fn main() {
 
 - [ ] `BSTMap`
     - [x] `new` / `default`
-    - [ ] `with_capacity`
-    - [ ] `reserve`
-    - [ ] `shrink_to_fit`
+    - [x] `with_capacity`
+    - [x] `reserve`
+    - [x] `shrink_to_fit`
     - [x] `len` / `is_empty`
     - [x] `get` / `get_mut`
     - [ ] `get_entry` / `get_entry_mut` - return `Option<(&K, &V)>` and `Option<(&K, &mut V)>` respectively
