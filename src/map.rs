@@ -100,6 +100,28 @@ impl<K: Ord, V> BSTMap<K, V> {
         self.nodes.is_empty()
     }
 
+    /// Returns `true` if the map contains a value for the specified key.
+    ///
+    /// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
+    /// form must match the ordering on the key type.
+    ///
+    /// Time complexity: `O(log n)`
+    pub fn contains_key<Q>(&self, key: &Q) -> bool
+        where K: Borrow<Q>,
+              Q: Ord + ?Sized,
+    {
+        let mut current = self.root();
+        while let Some(node) = current {
+            match key.cmp(node.key().borrow()) {
+                Ordering::Less => current = node.left(),
+                Ordering::Greater => current = node.right(),
+                Ordering::Equal => return true,
+            }
+        }
+
+        false
+    }
+
     /// Returns a reference to the value corresponding to the given key, or `None` if no such key
     /// exists in the binary search tree
     ///

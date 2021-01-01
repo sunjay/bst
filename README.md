@@ -58,7 +58,7 @@ fn main() {
     - [x] `len` / `is_empty`
     - [x] `get` / `get_mut`
     - [ ] `get_entry` / `get_entry_mut` - return `Option<(&K, &V)>` and `Option<(&K, &mut V)>` respectively
-    - [ ] `contains_key`
+    - [x] `contains_key`
     - [x] `insert`
     - [ ] `remove`
     - [ ] `remove_entry`
