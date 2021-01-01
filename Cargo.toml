@@ -11,3 +11,8 @@ edition = "2018"
 [dev-dependencies]
 rand = "0.8"
 rayon = "1.5"
+criterion = "0.3"
+
+[[bench]]
+name = "map_comparison"
+harness = false
