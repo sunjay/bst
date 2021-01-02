@@ -72,10 +72,4 @@ impl<'a, K, V> Iterator for PostorderIter<'a, K, V> {
     }
 }
 
-impl<'a, K, V> ExactSizeIterator for PostorderIter<'a, K, V> {
-    fn len(&self) -> usize {
-        self.nodes.len()
-    }
-}
-
 impl<'a, K, V> FusedIterator for PostorderIter<'a, K, V> {}

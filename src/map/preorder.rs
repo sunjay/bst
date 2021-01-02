@@ -30,10 +30,4 @@ impl<'a, K, V> Iterator for PreorderIter<'a, K, V> {
     }
 }
 
-impl<'a, K, V> ExactSizeIterator for PreorderIter<'a, K, V> {
-    fn len(&self) -> usize {
-        self.nodes.len()
-    }
-}
-
 impl<'a, K, V> FusedIterator for PreorderIter<'a, K, V> {}
