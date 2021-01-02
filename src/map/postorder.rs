@@ -2,7 +2,6 @@ use std::iter::FusedIterator;
 
 use super::{InnerNode, index::NodeIndex};
 
-#[derive(Debug)]
 pub struct PostorderIter<'a, K, V> {
     nodes: &'a [InnerNode<K, V>],
     stack: Vec<usize>,

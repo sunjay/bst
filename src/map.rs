@@ -9,12 +9,13 @@ pub use preorder::*;
 pub use inorder::*;
 pub use postorder::*;
 
+use std::fmt;
 use std::cmp::Ordering;
 use std::borrow::Borrow;
 
 use index::NodeIndex;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct InnerNode<K, V> {
     key: K,
     value: V,
@@ -50,7 +51,7 @@ fn push_node<K, V>(nodes: &mut Vec<InnerNode<K, V>>, key: K, value: V) -> NodeIn
 ///
 /// The tree is not guaranteed to be structured or balanced in any particular way. The
 /// implementation may structure the tree however is needed to fulfill the BST properties.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct BSTMap<K, V> {
     nodes: Vec<InnerNode<K, V>>,
     root: NodeIndex,
@@ -62,6 +63,17 @@ impl<K, V> Default for BSTMap<K, V> {
             nodes: Default::default(),
             root: Default::default(),
         }
+    }
+}
+
+impl<K, V> fmt::Debug for BSTMap<K, V>
+    where K: Ord + fmt::Debug,
+          V: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BSTMap")
+            .field("root", &self.root())
+            .finish()
     }
 }
 
