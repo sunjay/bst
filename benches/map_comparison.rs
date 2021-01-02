@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 use std::hash::Hash;
 use std::collections::{BTreeMap, HashMap};
 
+use rand::prelude::*;
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 
 use bst::BSTMap;
@@ -71,71 +72,85 @@ impl_map!(HashMap, Hash + Eq);
 impl_map!(BTreeMap, Ord);
 impl_map!(BSTMap, Ord);
 
-// Generates a key for the map
-//
-// Note that the keys returned are not guaranteed to be unique, but will be
-// largely unique.
-fn make_key(i: i64) -> i64 {
-    // Make sure i >= 0
-    let i = i.max(0);
+#[derive(Debug, Clone)]
+struct Keys {
+    keys: Vec<i64>,
+}
 
-    // Want to spread keys out so we generate interesting trees/tables.
-    // Trying not to generate consecutive keys or keys that are strictly
-    // increasing in magnitude.
+impl Keys {
+    /// Deterministically generates a set of at least `nkeys` values
+    ///
+    /// All values are guaranteed to be unique and ordered randomly.
+    pub fn generate(nkeys: u32) -> Self {
+        // Want to spread keys out so we generate interesting trees/tables.
+        // Trying not to generate consecutive keys or keys that are strictly
+        // increasing in magnitude.
 
-    // Since i >= 0, i % 3 = 0, 1, or 2
-    // So 2/3 of numbers will be positive, 1/3 will be negative
-    let sign = if i % 3 >= 1 { 1 } else { -1 };
+        let mut keys = Vec::new();
 
-    // Since i >= 0, i % 6 = 0, 1, 2, 3, 4, or 5
-    // So 2/6 of numbers divided by 1 (no change)
-    //    2/6 of numbers divided by 3
-    //    2/6 of numbers divided by 6
-    let divisor = match i % 6 {
-        0 | 1 => 1,
-        2 | 4 => 3,
-        3 | 5 => 6,
-        _ => unreachable!(),
-    };
+        let n = nkeys as i64;
+        for i in 0..n {
+            // [0..n] - n/2 = [-n/2..n/2]
+            // [-n/2..n/2] * 4 = [-4n/2..4n/2]
+            // Multiply by 4 so that numbers aren't consecutive
+            let key = (i - n/2) * 10;
+            keys.push(key);
+        }
 
-    sign * (i + 1) * 4 / divisor
+        // Use seed to make this deterministic
+        let mut rng = StdRng::seed_from_u64(45930923092);
+        // Shuffle to ensure that keys are in a uniformly random order
+        keys.shuffle(&mut rng);
+
+        Self {keys}
+    }
+
+    pub fn get(&self, key_i: i64) -> i64 {
+        // Make sure index is >= 0
+        let index = key_i.max(0);
+        self.keys[index as usize]
+    }
+}
+
+fn slice_max<T: Copy + Ord>(data: &[T]) -> T {
+    data.iter().max().copied().expect("bug: slice was empty")
 }
 
 /// Runs many consecutive inserts on a map
-fn benchmark_inserts<M: Map<i64, usize>>(inserts: usize) -> M {
+fn benchmark_inserts<M: Map<i64, usize>>(keys: &Keys, inserts: usize) -> M {
     let mut map = M::new();
 
     for key_i in 0..inserts {
-        black_box(map.insert(make_key(key_i as i64), key_i));
+        black_box(map.insert(keys.get(key_i as i64), key_i));
     }
 
     map
 }
 
 /// Setup function for benchmark_gets
-fn setup_benchmark_gets<M: Map<i64, usize>>(gets: usize) -> M {
+fn setup_benchmark_gets<M: Map<i64, usize>>(keys: &Keys, gets: usize) -> M {
     let mut map = M::new();
 
     for key_i in 0..gets {
-        black_box(map.insert(make_key(key_i as i64), key_i));
+        black_box(map.insert(keys.get(key_i as i64), key_i));
     }
 
     map
 }
 
 /// Runs many consecutive get operations on a map
-fn benchmark_gets<M: Map<i64, usize>>(map: &mut M, gets: usize) {
+fn benchmark_gets<M: Map<i64, usize>>(keys: &Keys, map: &mut M, gets: usize) {
     for i in 0..gets {
         // Get keys in the opposite order to how they were inserted
         let key_i = gets - i - 1;
-        let key = make_key(key_i as i64);
+        let key = keys.get(key_i as i64);
         black_box(map.get(&key));
         black_box(map.get_mut(&key));
     }
 }
 
 /// Runs a bunch of operations on a map
-fn benchmark_map_ops<M: Map<i64, usize>>(steps: usize) -> M {
+fn benchmark_map_ops<M: Map<i64, usize>>(keys: &Keys, steps: usize) -> M {
     const MAX_INSERTS: usize = 5;
     const MAX_GETS: usize = 3;
     // const MAX_REMOVES: usize = 2;
@@ -148,19 +163,19 @@ fn benchmark_map_ops<M: Map<i64, usize>>(steps: usize) -> M {
         let insertions = i % MAX_INSERTS;
         // Loop always runs at least once
         for j in 0..=insertions {
-            let key = make_key(key_i);
+            let key = keys.get(key_i);
             key_i += 1;
             black_box(map.insert(key, i + j));
         }
 
         // Overwrite a previous insertion
-        let key = make_key(key_i - 1);
+        let key = keys.get(key_i - 1);
         black_box(map.insert(key, 0));
 
         // Try to get and update several values
         let gets = MAX_GETS - (i % MAX_GETS);
         for j in 0..gets {
-            let key = make_key(key_i - j as i64);
+            let key = keys.get(key_i - j as i64);
             let value = match map.get(&key) {
                 Some(value) => *value,
                 None => continue, // ignore
@@ -186,16 +201,18 @@ fn benchmark_map_ops<M: Map<i64, usize>>(steps: usize) -> M {
 pub fn bench_inserts(c: &mut Criterion) {
     const INSERTS: &[usize] = &[50, 100, 500, 1000, 2000];
 
+    let keys = Keys::generate(slice_max(INSERTS) as u32);
+
     let mut group = c.benchmark_group("insert");
     for inserts in INSERTS {
         group.bench_with_input(BenchmarkId::new("HashMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts::<HashMap<i64, usize>>(inserts))
+            b.iter(|| benchmark_inserts::<HashMap<i64, usize>>(&keys, inserts))
         });
         group.bench_with_input(BenchmarkId::new("BTreeMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts::<BTreeMap<i64, usize>>(inserts))
+            b.iter(|| benchmark_inserts::<BTreeMap<i64, usize>>(&keys, inserts))
         });
         group.bench_with_input(BenchmarkId::new("BSTMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts::<BSTMap<i64, usize>>(inserts))
+            b.iter(|| benchmark_inserts::<BSTMap<i64, usize>>(&keys, inserts))
         });
     }
     group.finish();
@@ -204,19 +221,21 @@ pub fn bench_inserts(c: &mut Criterion) {
 pub fn bench_gets(c: &mut Criterion) {
     const GETS: &[usize] = &[50, 100, 500, 1000, 2000];
 
+    let keys = Keys::generate(slice_max(GETS) as u32);
+
     let mut group = c.benchmark_group("get");
     for gets in GETS {
         group.bench_with_input(BenchmarkId::new("HashMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets(gets);
-            b.iter(|| benchmark_gets::<HashMap<i64, usize>>(&mut map, gets))
+            let mut map = setup_benchmark_gets(&keys, gets);
+            b.iter(|| benchmark_gets::<HashMap<i64, usize>>(&keys, &mut map, gets))
         });
         group.bench_with_input(BenchmarkId::new("BTreeMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets(gets);
-            b.iter(|| benchmark_gets::<BTreeMap<i64, usize>>(&mut map, gets))
+            let mut map = setup_benchmark_gets(&keys, gets);
+            b.iter(|| benchmark_gets::<BTreeMap<i64, usize>>(&keys, &mut map, gets))
         });
         group.bench_with_input(BenchmarkId::new("BSTMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets(gets);
-            b.iter(|| benchmark_gets::<BSTMap<i64, usize>>(&mut map, gets))
+            let mut map = setup_benchmark_gets(&keys, gets);
+            b.iter(|| benchmark_gets::<BSTMap<i64, usize>>(&keys, &mut map, gets))
         });
     }
     group.finish();
@@ -225,16 +244,19 @@ pub fn bench_gets(c: &mut Criterion) {
 pub fn bench_map_ops(c: &mut Criterion) {
     const STEPS: &[usize] = &[50, 100, 1000, 2000, 4000];
 
+    // Using (max * 5) because we do up to `MAX_INSERTS` inserts per step
+    let keys = Keys::generate(slice_max(STEPS) as u32 * 5);
+
     let mut group = c.benchmark_group("map operations");
     for steps in STEPS {
         group.bench_with_input(BenchmarkId::new("HashMap", steps), steps, |b, &steps| {
-            b.iter(|| benchmark_map_ops::<HashMap<i64, usize>>(steps))
+            b.iter(|| benchmark_map_ops::<HashMap<i64, usize>>(&keys, steps))
         });
         group.bench_with_input(BenchmarkId::new("BTreeMap", steps), steps, |b, &steps| {
-            b.iter(|| benchmark_map_ops::<BTreeMap<i64, usize>>(steps))
+            b.iter(|| benchmark_map_ops::<BTreeMap<i64, usize>>(&keys, steps))
         });
         group.bench_with_input(BenchmarkId::new("BSTMap", steps), steps, |b, &steps| {
-            b.iter(|| benchmark_map_ops::<BSTMap<i64, usize>>(steps))
+            b.iter(|| benchmark_map_ops::<BSTMap<i64, usize>>(&keys, steps))
         });
     }
     group.finish();
