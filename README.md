@@ -59,6 +59,7 @@ fn main() {
     - [x] `len` / `is_empty`
     - [x] `get` / `get_mut`
     - [ ] `get_entry` / `get_entry_mut` - return `Option<(&K, &V)>` and `Option<(&K, &mut V)>` respectively
+    - [ ] `entry`
     - [x] `contains_key`
     - [x] `insert`
     - [ ] `remove`
@@ -74,10 +75,9 @@ fn main() {
     - [x] `root` - returns the root node of the tree and allows you to traverse all nodes
     - [x] `root_mut` - returns the root node of the tree and allows you to traverse all nodes (mutable)
         - [ ] fix `left` and `right` methods so they take `&mut self` instead of `self`
-    - [ ] impl `FromIterator`
-    - [ ] `extend` - `Extend` trait
+    - [x] `FromIterator` trait
+    - [x] `Extend` trait
     - [ ] `append`
-    - [ ] `entry`
     - [ ] `keys` / `values` / `values_mut` - might not be needed? arbitrary order?
     - [ ] self-balancing via AVL or red/black or something else
     - [x] `Debug` impls for public types that don't expose implementation details

@@ -12,6 +12,7 @@ pub use postorder::*;
 use std::fmt;
 use std::cmp::Ordering;
 use std::borrow::Borrow;
+use std::iter::FromIterator;
 
 use index::NodeIndex;
 
@@ -482,6 +483,38 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// resize policy.
     pub fn shrink_to_fit(&mut self) {
         self.nodes.shrink_to_fit()
+    }
+}
+
+impl<K: Ord, V> Extend<(K, V)> for BSTMap<K, V> {
+    fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
+        let iter = iter.into_iter();
+
+        // Avoid allocating too many times by reserving the space we know we will need
+        let (min_len, max_len) = iter.size_hint();
+        let len = max_len.unwrap_or(min_len);
+        self.reserve(len);
+
+        for (key, value) in iter {
+            self.insert(key, value);
+        }
+    }
+}
+
+impl<K: Ord, V> FromIterator<(K, V)> for BSTMap<K, V> {
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+
+        // Avoid allocating too many times by reserving the space we know we will need
+        let (min_len, max_len) = iter.size_hint();
+        let len = max_len.unwrap_or(min_len);
+        let mut map = Self::with_capacity(len);
+
+        for (key, value) in iter {
+            map.insert(key, value);
+        }
+
+        map
     }
 }
 
