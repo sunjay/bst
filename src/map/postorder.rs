@@ -2,13 +2,13 @@ use std::iter::FusedIterator;
 
 use super::{InnerNode, index::NodeIndex};
 
-pub struct PostorderIter<'a, K, V> {
+pub struct IterPostorder<'a, K, V> {
     nodes: &'a [InnerNode<K, V>],
     stack: Vec<usize>,
 }
 
 // See: https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/
-impl<'a, K, V> PostorderIter<'a, K, V> {
+impl<'a, K, V> IterPostorder<'a, K, V> {
     pub(super) fn new(nodes: &'a [InnerNode<K, V>], root: NodeIndex) -> Self {
         let mut stack = Vec::new();
         let mut current = root.into_index();
@@ -27,7 +27,7 @@ impl<'a, K, V> PostorderIter<'a, K, V> {
 }
 
 // See: https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/
-impl<'a, K, V> Iterator for PostorderIter<'a, K, V> {
+impl<'a, K, V> Iterator for IterPostorder<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -72,4 +72,4 @@ impl<'a, K, V> Iterator for PostorderIter<'a, K, V> {
     }
 }
 
-impl<'a, K, V> FusedIterator for PostorderIter<'a, K, V> {}
+impl<'a, K, V> FusedIterator for IterPostorder<'a, K, V> {}

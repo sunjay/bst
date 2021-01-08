@@ -248,18 +248,18 @@ impl<T: Ord> BSTSet<T> {
     }
 
     /// Performs a pre-order traversal of the tree
-    pub fn iter_preorder(&self) -> PreorderIter<T> {
-        PreorderIter::new(&self.items)
+    pub fn iter_preorder(&self) -> IterPreorder<T> {
+        IterPreorder::new(&self.items)
     }
 
     /// Performs an in-order traversal of the tree
-    pub fn iter_inorder(&self) -> InorderIter<T> {
-        InorderIter::new(&self.items)
+    pub fn iter_inorder(&self) -> IterInorder<T> {
+        IterInorder::new(&self.items)
     }
 
     /// Performs a post-order traversal of the tree
-    pub fn iter_postorder(&self) -> PostorderIter<T> {
-        PostorderIter::new(&self.items)
+    pub fn iter_postorder(&self) -> IterPostorder<T> {
+        IterPostorder::new(&self.items)
     }
 
     /// Returns the root node of the tree, or `None` if the tree is empty

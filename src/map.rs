@@ -410,18 +410,18 @@ impl<K: Ord, V> BSTMap<K, V> {
     }
 
     /// Performs a pre-order traversal of the tree
-    pub fn iter_preorder(&self) -> PreorderIter<K, V> {
-        PreorderIter::new(&self.nodes, self.root)
+    pub fn iter_preorder(&self) -> IterPreorder<K, V> {
+        IterPreorder::new(&self.nodes, self.root)
     }
 
     /// Performs an in-order traversal of the tree
-    pub fn iter_inorder(&self) -> InorderIter<K, V> {
-        InorderIter::new(&self.nodes, self.root)
+    pub fn iter_inorder(&self) -> IterInorder<K, V> {
+        IterInorder::new(&self.nodes, self.root)
     }
 
     /// Performs a post-order traversal of the tree
-    pub fn iter_postorder(&self) -> PostorderIter<K, V> {
-        PostorderIter::new(&self.nodes, self.root)
+    pub fn iter_postorder(&self) -> IterPostorder<K, V> {
+        IterPostorder::new(&self.nodes, self.root)
     }
 
     /// Performs a pre-order traversal of the tree

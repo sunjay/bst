@@ -1,10 +1,10 @@
 use std::iter::FusedIterator;
 
-pub struct InorderIter<'a, T> {
-    inner: crate::map::InorderIter<'a, T, ()>
+pub struct IterInorder<'a, T> {
+    inner: crate::map::IterInorder<'a, T, ()>
 }
 
-impl<'a, T: Ord> InorderIter<'a, T> {
+impl<'a, T: Ord> IterInorder<'a, T> {
     pub(super) fn new(map: &'a crate::map::BSTMap<T, ()>) -> Self {
         Self {
             inner: map.iter_inorder(),
@@ -12,7 +12,7 @@ impl<'a, T: Ord> InorderIter<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for InorderIter<'a, T> {
+impl<'a, T> Iterator for IterInorder<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -20,4 +20,4 @@ impl<'a, T> Iterator for InorderIter<'a, T> {
     }
 }
 
-impl<'a, T> FusedIterator for InorderIter<'a, T> {}
+impl<'a, T> FusedIterator for IterInorder<'a, T> {}

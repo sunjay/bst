@@ -2,13 +2,13 @@ use std::iter::FusedIterator;
 
 use super::{InnerNode, index::NodeIndex};
 
-pub struct InorderIter<'a, K, V> {
+pub struct IterInorder<'a, K, V> {
     nodes: &'a [InnerNode<K, V>],
     stack: Vec<usize>,
 }
 
 // See: https://www.geeksforgeeks.org/inorder-tree-traversal-without-recursion/
-impl<'a, K, V> InorderIter<'a, K, V> {
+impl<'a, K, V> IterInorder<'a, K, V> {
     pub(super) fn new(nodes: &'a [InnerNode<K, V>], root: NodeIndex) -> Self {
         let mut stack = Vec::new();
         let mut current = root.into_index();
@@ -24,7 +24,7 @@ impl<'a, K, V> InorderIter<'a, K, V> {
 }
 
 // See: https://www.geeksforgeeks.org/inorder-tree-traversal-without-recursion/
-impl<'a, K, V> Iterator for InorderIter<'a, K, V> {
+impl<'a, K, V> Iterator for IterInorder<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -44,4 +44,4 @@ impl<'a, K, V> Iterator for InorderIter<'a, K, V> {
     }
 }
 
-impl<'a, K, V> FusedIterator for InorderIter<'a, K, V> {}
+impl<'a, K, V> FusedIterator for IterInorder<'a, K, V> {}

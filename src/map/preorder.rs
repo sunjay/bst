@@ -2,12 +2,12 @@ use std::iter::FusedIterator;
 
 use super::{InnerNode, index::NodeIndex};
 
-pub struct PreorderIter<'a, K, V> {
+pub struct IterPreorder<'a, K, V> {
     nodes: &'a [InnerNode<K, V>],
     stack: Vec<usize>,
 }
 
-impl<'a, K, V> PreorderIter<'a, K, V> {
+impl<'a, K, V> IterPreorder<'a, K, V> {
     pub(super) fn new(nodes: &'a [InnerNode<K, V>], root: NodeIndex) -> Self {
         Self {
             nodes,
@@ -17,7 +17,7 @@ impl<'a, K, V> PreorderIter<'a, K, V> {
 }
 
 // See: https://www.geeksforgeeks.org/iterative-preorder-traversal/
-impl<'a, K, V> Iterator for PreorderIter<'a, K, V> {
+impl<'a, K, V> Iterator for IterPreorder<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -30,4 +30,4 @@ impl<'a, K, V> Iterator for PreorderIter<'a, K, V> {
     }
 }
 
-impl<'a, K, V> FusedIterator for PreorderIter<'a, K, V> {}
+impl<'a, K, V> FusedIterator for IterPreorder<'a, K, V> {}
