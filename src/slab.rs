@@ -100,6 +100,7 @@ impl<T> UnsafeSlab<T> {
             let entry = unsafe { self.items.get_unchecked_mut(free_list_head) };
 
             // Update the free list to point to the next free list entry
+            // Safety: All items on the free list are guaranteed to be FreeEntry structs
             let next_free = unsafe { entry.free }.next_free;
             self.free_list_head = next_free;
 
@@ -140,6 +141,38 @@ impl<T> UnsafeSlab<T> {
 
 impl<T> Drop for UnsafeSlab<T> {
     fn drop(&mut self) {
-        todo!()
+        // Fast path: ignore if `T` does not need to be dropped
+        if !mem::needs_drop::<T>() {
+            return;
+        }
+
+        use std::collections::HashSet;
+
+        // Record the indexes that are in the free list
+        let mut free_indexes = HashSet::new();
+
+        let mut current = self.free_list_head;
+        while let Some(index) = current.into_index() {
+            free_indexes.insert(index);
+
+            // Safety: Items on the free list are guaranteed to be valid indexes
+            let entry = unsafe { self.items.get_unchecked(index) };
+            // Safety: All items on the free list are guaranteed to be FreeEntry structs
+            let next_free = unsafe { entry.free }.next_free;
+            current = next_free;
+        }
+
+        for index in 0..self.items.len() {
+            if free_indexes.contains(&index) {
+                continue;
+            }
+
+            // Safety: The `index` is between 0 and self.items.len(), so it must be valid
+            let entry = unsafe { self.items.get_unchecked_mut(index) };
+            // Safety: The item was not on the free list, so it must be a value
+            let value = unsafe { &mut entry.value };
+            // Safety: This call only happens once because all indexes are unique
+            unsafe { ManuallyDrop::drop(value); }
+        }
     }
 }
