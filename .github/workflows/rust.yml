@@ -1,0 +1,69 @@
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+name: Continuous integration
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v2
+
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          components: clippy
+          override: true
+
+      - name: build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-targets
+        env:
+          RUSTFLAGS: -D warnings
+
+      - name: clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+        env:
+          RUSTFLAGS: -D warnings
+
+      - name: test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+        env:
+          RUSTFLAGS: -D warnings
+
+      - name: install miri
+        if: ${{ matrix.rust == 'nightly' }}
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          components: miri
+          override: true
+
+      - name: miri
+        if: ${{ matrix.rust == 'nightly' }}
+        uses: actions-rs/cargo@v1
+        with:
+          command: miri
+          args: test
