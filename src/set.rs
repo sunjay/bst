@@ -349,7 +349,6 @@ mod tests {
 
     use std::collections::HashSet;
 
-    use rayon::prelude::*;
     use rand::prelude::*;
 
     #[test]
@@ -416,10 +415,24 @@ mod tests {
 
     #[test]
     fn test_random_operations() {
-        const TEST_CASES: usize = 1024;
-        const OPERATIONS: usize = 128;
+        cfg_if::cfg_if! {
+            if #[cfg(miri)] {
+                const TEST_CASES: usize = 16;
+                const OPERATIONS: usize = 24;
 
-        (0..TEST_CASES).into_par_iter().for_each(|_| {
+                (0..TEST_CASES).into_iter().for_each(|_| test_case());
+
+            } else {
+                use rayon::prelude::*;
+
+                const TEST_CASES: usize = 1024;
+                const OPERATIONS: usize = 128;
+
+                (0..TEST_CASES).into_par_iter().for_each(|_| test_case());
+            }
+        }
+
+        fn test_case() {
             let mut set = BSTSet::new();
             // Compare against a HashSet
             let mut expected = HashSet::new();
@@ -486,7 +499,7 @@ mod tests {
                 assert_eq!(set.contains(&value), expected.contains(&value));
                 assert_eq!(set.get(&value), expected.get(&value));
             }
-        });
+        }
     }
 
     #[test]
