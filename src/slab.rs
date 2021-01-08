@@ -55,8 +55,8 @@ union Entry<T> {
 /// An item in the free list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct FreeEntry {
-    /// The index of the next entry in the free list or Ptr::null() if this is the last entry in the
-    /// free list
+    /// The index of the next entry in the free list or `Ptr::null()` if this is the last entry in
+    /// the free list
     next_free: Ptr,
 }
 
@@ -93,7 +93,7 @@ impl<T> UnsafeSlab<T> {
         &mut self.items.get_unchecked_mut(index).value
     }
 
-    pub fn push(&mut self, value: T) -> Ptr {
+    pub fn push(&mut self, value: T) -> usize {
         // Check if we can reuse some space from the free list
         if let Some(free_list_head) = self.free_list_head.into_index() {
             // Safety: Items on the free list are guaranteed to be valid indexes
@@ -105,14 +105,18 @@ impl<T> UnsafeSlab<T> {
 
             // No need to worry about dropping FreeEntry because it is Copy
             *entry = Entry {value: ManuallyDrop::new(value)};
-            // Safety: Items on the free list are guaranteed to be valid indexes
-            let index = unsafe { Ptr::new_unchecked(free_list_head) };
-            return index;
+
+            return free_list_head;
         }
 
         let index = self.items.len();
+        if index >= usize::MAX {
+            panic!("cannot have more than usize::MAX - 1 entries in slab");
+        }
+
         self.items.push(Entry {value: ManuallyDrop::new(value)});
-        Ptr::new(index).expect("cannot have more than usize::MAX - 1 entries in slab")
+
+        index
     }
 
     pub unsafe fn remove(&mut self, index: usize) -> T {
