@@ -5,7 +5,7 @@ use super::{InnerNode, index::NodeIndex, push_node};
 
 /// A single node of the binary search tree
 #[derive(Clone, PartialEq, Eq)]
-pub struct BSTNode<'a, K, V> {
+pub struct Node<'a, K, V> {
     nodes: &'a [InnerNode<K, V>],
     /// An index into `nodes` for the node represented by this struct
     ///
@@ -13,12 +13,12 @@ pub struct BSTNode<'a, K, V> {
     index: usize,
 }
 
-impl<'a, K, V> fmt::Debug for BSTNode<'a, K, V>
+impl<'a, K, V> fmt::Debug for Node<'a, K, V>
     where K: Ord + fmt::Debug,
           V: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BSTNode")
+        f.debug_struct("Node")
             .field("key", self.key())
             .field("value", self.value())
             .field("left", &self.left())
@@ -27,8 +27,8 @@ impl<'a, K, V> fmt::Debug for BSTNode<'a, K, V>
     }
 }
 
-impl<'a, K: Ord, V> BSTNode<'a, K, V> {
-    /// Creates a new `BSTNode`
+impl<'a, K: Ord, V> Node<'a, K, V> {
+    /// Creates a new `Node`
     ///
     /// # Safety
     ///
@@ -80,7 +80,7 @@ impl<'a, K: Ord, V> BSTNode<'a, K, V> {
 /// Note that only the value is mutable, not the key since modifying the key
 /// could result in invalidating the ordering properties.
 #[derive(PartialEq, Eq)]
-pub struct BSTNodeMut<'a, K, V> {
+pub struct NodeMut<'a, K, V> {
     nodes: &'a mut Vec<InnerNode<K, V>>,
     /// An index into `nodes` for the node represented by this struct
     ///
@@ -88,12 +88,12 @@ pub struct BSTNodeMut<'a, K, V> {
     index: usize,
 }
 
-impl<'a, K, V> fmt::Debug for BSTNodeMut<'a, K, V>
+impl<'a, K, V> fmt::Debug for NodeMut<'a, K, V>
     where K: Ord + fmt::Debug,
           V: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BSTNodeMut")
+        f.debug_struct("NodeMut")
             .field("key", self.key())
             .field("value", self.value())
             .field("left", &"...")
@@ -102,8 +102,8 @@ impl<'a, K, V> fmt::Debug for BSTNodeMut<'a, K, V>
     }
 }
 
-impl<'a, K: Ord, V> BSTNodeMut<'a, K, V> {
-    /// Creates a new `BSTNodeMut`
+impl<'a, K: Ord, V> NodeMut<'a, K, V> {
+    /// Creates a new `NodeMut`
     ///
     /// # Safety
     ///

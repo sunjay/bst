@@ -112,7 +112,8 @@ impl<K: Ord, V> BSTMap<K, V> {
         }
     }
 
-    /// Returns the number of nodes in the tree
+    /// Returns the number of entries in the map (i.e. the number of nodes in the binary search
+    /// tree)
     ///
     /// Time complexity: `O(1)`
     ///
@@ -148,7 +149,7 @@ impl<K: Ord, V> BSTMap<K, V> {
         self.nodes.capacity()
     }
 
-    /// Returns true if the tree is empty
+    /// Returns true if the map is empty
     ///
     /// Time complexity: `O(1)`
     ///
@@ -181,8 +182,8 @@ impl<K: Ord, V> BSTMap<K, V> {
     ///
     /// let mut map = BSTMap::new();
     /// map.insert(1, "a");
-    /// assert_eq!(map.contains_key(&1), true);
-    /// assert_eq!(map.contains_key(&2), false);
+    /// assert!(map.contains_key(&1));
+    /// assert!(!map.contains_key(&2));
     /// ```
     pub fn contains_key<Q>(&self, key: &Q) -> bool
         where K: Borrow<Q>,
@@ -273,6 +274,40 @@ impl<K: Ord, V> BSTMap<K, V> {
         None
     }
 
+    /// Returns a key-value pair corresponding to the given key, or `None` if no such key exists in
+    /// the binary search tree
+    ///
+    /// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
+    /// form must match the ordering on the key type.
+    ///
+    /// Time complexity: `O(log n)`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// map.insert(1, "a");
+    /// assert_eq!(map.get_entry(&1), Some((&1, &"a")));
+    /// assert_eq!(map.get_entry(&2), None);
+    /// ```
+    pub fn get_entry<Q>(&self, key: &Q) -> Option<(&K, &V)>
+        where K: Borrow<Q>,
+              Q: Ord + ?Sized,
+    {
+        let mut current = self.root();
+        while let Some(node) = current {
+            match key.cmp(node.key().borrow()) {
+                Ordering::Less => current = node.left(),
+                Ordering::Greater => current = node.right(),
+                Ordering::Equal => return Some((node.key(), node.value())),
+            }
+        }
+
+        None
+    }
+
     /// Inserts a new value into the binary search tree
     ///
     /// Returns the previous value if the key was already present in an
@@ -335,6 +370,9 @@ impl<K: Ord, V> BSTMap<K, V> {
 
     /// Removes a key from the map, returning the value at the key if the key was previously in the
     /// map.
+    ///
+    /// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
+    /// form must match the ordering on the key type.
     ///
     /// # Examples
     ///
@@ -415,7 +453,7 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// # Examples
     ///
     /// ```no_run
-    /// use bst::{BSTMap, map::BSTNode};
+    /// use bst::{BSTMap, map::Node};
     ///
     /// #[derive(Debug, PartialEq, Eq)]
     /// struct Stats {
@@ -424,7 +462,7 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// }
     ///
     /// // Custom traversal through the values in the map
-    /// fn find_score(node: Option<BSTNode<i32, Stats>>, target_score: u32) -> Option<BSTNode<i32, Stats>> {
+    /// fn find_score(node: Option<Node<i32, Stats>>, target_score: u32) -> Option<Node<i32, Stats>> {
     ///     let node = node?;
     ///     if node.value().score == target_score {
     ///         Some(node)
@@ -448,24 +486,22 @@ impl<K: Ord, V> BSTMap<K, V> {
     ///     println!("{:?}", find_score(map.root(), 500));
     /// }
     /// ```
-    pub fn root(&self) -> Option<BSTNode<K, V>> {
+    pub fn root(&self) -> Option<Node<K, V>> {
         // Safety: `self.root` is a valid index into `self.nodes`
-        unsafe { BSTNode::new(&self.nodes, self.root) }
+        unsafe { Node::new(&self.nodes, self.root) }
     }
 
     /// Returns the root node of the tree, or `None` if the tree is empty
     ///
-    /// Note that the root can be **any** node inserted into the tree. This may
-    /// change depending on the self-balancing characteristics of the
-    /// implementation. For a guaranteed ordering, use the various iteration
-    /// methods.
+    /// Note that the root can be **any** node inserted into the tree. This may change depending on
+    /// the self-balancing characteristics of the implementation. For a guaranteed ordering, use the
+    /// various iteration methods.
     ///
-    /// This is a low-level API meant to be used for implementing traversals.
-    /// The inner structure of the tree can be anything that satisfies the
-    /// BST properties.
-    pub fn root_mut(&mut self) -> Option<BSTNodeMut<K, V>> {
+    /// This is a low-level API meant to be used for implementing traversals. The inner structure of
+    /// the tree can be anything that satisfies the BST properties.
+    pub fn root_mut(&mut self) -> Option<NodeMut<K, V>> {
         // Safety: `self.root` is a valid index into `self.nodes`
-        unsafe { BSTNodeMut::new(&mut self.nodes, self.root) }
+        unsafe { NodeMut::new(&mut self.nodes, self.root) }
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted in the map. The
@@ -654,7 +690,9 @@ mod tests {
 
                         assert_eq!(map.get(&key), expected.get(&key));
                         assert_eq!(map.get_mut(&key), expected.get_mut(&key));
+
                         assert_eq!(map.insert(key, value), expected.insert(key, value));
+
                         assert_eq!(map.get(&key), expected.get(&key));
                         assert_eq!(map.get_mut(&key), expected.get_mut(&key));
                     },
@@ -720,7 +758,7 @@ mod tests {
         }
 
         // Custom traversal through the values in the map
-        fn find_score(node: Option<BSTNode<i32, Stats>>, target_score: u32) -> Option<BSTNode<i32, Stats>> {
+        fn find_score(node: Option<Node<i32, Stats>>, target_score: u32) -> Option<Node<i32, Stats>> {
             let node = node?;
             if node.value().score == target_score {
                 Some(node)

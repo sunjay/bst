@@ -14,7 +14,7 @@ collected language, but without the extra overhead and with all the usual protec
 borrow checker.
 
 ```rust
-use bst::{BSTMap, map::BSTNode};
+use bst::{BSTMap, map::Node};
 
 #[derive(Debug, PartialEq, Eq)]
 struct Stats {
@@ -23,7 +23,7 @@ struct Stats {
 }
 
 // Custom traversal through the values in the map
-fn find_score(node: Option<BSTNode<i32, Stats>>, target_score: u32) -> Option<BSTNode<i32, Stats>> {
+fn find_score(node: Option<Node<i32, Stats>>, target_score: u32) -> Option<Node<i32, Stats>> {
     let node = node?;
     if node.value().score == target_score {
         Some(node)
@@ -50,7 +50,7 @@ fn main() {
 
 ## Implementation Progress
 
-- [ ] `BSTMap`
+- [x] `BSTMap`
     - [x] `new` / `default`
     - [x] `with_capacity`
     - [x] `capacity`
@@ -58,7 +58,8 @@ fn main() {
     - [x] `shrink_to_fit`
     - [x] `len` / `is_empty`
     - [x] `get` / `get_mut`
-    - [ ] `get_entry` / `get_entry_mut` - return `Option<(&K, &V)>` and `Option<(&K, &mut V)>` respectively
+    - [x] `get_entry` - returns `Option<(&K, &V)>`
+    - [ ] `get_entry_mut` - returns `Option<(&K, &mut V)>`
     - [ ] `entry`
     - [x] `contains_key`
     - [x] `insert`
@@ -72,6 +73,9 @@ fn main() {
     - [ ] `iter_mut_preorder` - pre-order traversal (mutable)
     - [ ] `iter_mut_inorder` - in-order traversal (mutable)
     - [ ] `iter_mut_postorder` - post-order traversal (mutable)
+    - [ ] `into_iter_preorder` - pre-order traversal (owned)
+    - [ ] `into_iter_inorder` - in-order traversal (owned)
+    - [ ] `into_iter_postorder` - post-order traversal (owned)
     - [x] `root` - returns the root node of the tree and allows you to traverse all nodes
     - [x] `root_mut` - returns the root node of the tree and allows you to traverse all nodes (mutable)
         - [ ] fix `left` and `right` methods so they take `&mut self` instead of `self`
@@ -82,4 +86,28 @@ fn main() {
     - [ ] self-balancing via AVL or red/black or something else
     - [x] `Debug` impls for public types that don't expose implementation details
     - [x] implement other traits from `std::iter` on iterators (e.g. `ExactSizeIterator` or `FusedIterator`)
-- [ ] `BSTSet` - implemented as an API over `BSTMap<K, ()>`
+- [x] `BSTSet` - implemented as an API over `BSTMap<K, ()>`
+    - [x] `new` / `default`
+    - [x] `with_capacity`
+    - [x] `capacity`
+    - [x] `reserve`
+    - [x] `shrink_to_fit`
+    - [x] `len` / `is_empty`
+    - [x] `get`
+    - [x] `contains`
+    - [x] `insert`
+    - [ ] `remove`
+    - [ ] `retain` - arbitrary order?
+    - [x] `clear`
+    - [x] `iter_preorder` - pre-order traversal
+    - [x] `iter_inorder` - in-order traversal
+    - [x] `iter_postorder` - post-order traversal
+    - [ ] `into_iter_preorder` - pre-order traversal (owned)
+    - [ ] `into_iter_inorder` - in-order traversal (owned)
+    - [ ] `into_iter_postorder` - post-order traversal (owned)
+    - [x] `root` - returns the root node of the tree and allows you to traverse all nodes
+    - [x] `FromIterator` trait
+    - [x] `Extend` trait
+    - [ ] `append`
+    - [x] `Debug` impls for public types that don't expose implementation details
+    - [x] implement other traits from `std::iter` on iterators (e.g. `ExactSizeIterator` or `FusedIterator`)
