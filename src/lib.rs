@@ -1,3 +1,5 @@
+mod slab;
+
 pub mod map;
 pub mod set;
 
