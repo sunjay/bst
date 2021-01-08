@@ -19,3 +19,7 @@ criterion = "0.3"
 [[bench]]
 name = "map_comparison"
 harness = false
+
+[[bench]]
+name = "set_comparison"
+harness = false

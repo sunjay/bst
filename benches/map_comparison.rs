@@ -198,7 +198,7 @@ fn benchmark_map_ops<M: Map<i64, usize>>(keys: &Keys, steps: usize) -> M {
     map
 }
 
-pub fn bench_inserts(c: &mut Criterion) {
+pub fn bench_map_insert(c: &mut Criterion) {
     const INSERTS: &[usize] = &[50, 100, 500, 1000, 2000];
 
     let keys = Keys::generate(slice_max(INSERTS) as u32);
@@ -218,7 +218,7 @@ pub fn bench_inserts(c: &mut Criterion) {
     group.finish();
 }
 
-pub fn bench_gets(c: &mut Criterion) {
+pub fn bench_map_get(c: &mut Criterion) {
     const GETS: &[usize] = &[50, 100, 500, 1000, 2000];
 
     let keys = Keys::generate(slice_max(GETS) as u32);
@@ -263,8 +263,8 @@ pub fn bench_map_ops(c: &mut Criterion) {
 }
 
 criterion_group!(benches,
-    bench_inserts,
-    bench_gets,
+    bench_map_insert,
+    bench_map_get,
     bench_map_ops,
 );
 
