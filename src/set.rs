@@ -12,6 +12,17 @@ use std::fmt;
 use std::borrow::Borrow;
 use std::iter::FromIterator;
 
+/// A binary search tree (BST)
+///
+/// BST properties: For each node with value `v`:
+/// - The value of each node in the left subtree is less than `v`
+/// - The value of each node in the right subtree is greater than `v`
+///
+/// Duplicate values are not allowed. Inserting a values that already exists in the map does not
+/// modify the map.
+///
+/// The tree is not guaranteed to be structured or balanced in any particular way. The
+/// implementation may structure the tree however is needed to fulfill the BST properties.
 #[derive(Clone, PartialEq, Eq)]
 pub struct BSTSet<T> {
     items: crate::map::BSTMap<T, ()>,
