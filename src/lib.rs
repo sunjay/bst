@@ -50,7 +50,7 @@ mod tests {
             2 => 3, // trailing comma
         };
 
-        let pairs: Vec<(_, _)> = map.iter_preorder()
+        let pairs: Vec<(_, _)> = map.iter_inorder()
             .map(|(&key, &value)| (key, value))
             .collect();
         assert_eq!(&pairs, &[(1, 2), (2, 3), (3, 4)]);
@@ -58,15 +58,15 @@ mod tests {
         // No trailing comma
         let map = bstmap![3 => 4];
 
-        let pairs: Vec<(_, _)> = map.iter_preorder()
+        let pairs: Vec<(_, _)> = map.iter_inorder()
             .map(|(&key, &value)| (key, value))
             .collect();
-        assert_eq!(&pairs, &[(2, 3)]);
+        assert_eq!(&pairs, &[(3, 4)]);
 
         // Zero items
         let map = bstmap!();
 
-        let pairs: Vec<(i32, i32)> = map.iter_preorder()
+        let pairs: Vec<(i32, i32)> = map.iter_inorder()
             .map(|(&key, &value)| (key, value))
             .collect();
         assert_eq!(&pairs, &[]);
@@ -80,19 +80,19 @@ mod tests {
             2, // trailing comma
         };
 
-        let items: Vec<_> = set.iter_preorder().copied().collect();
+        let items: Vec<_> = set.iter_inorder().copied().collect();
         assert_eq!(&items, &[1, 2, 3]);
 
         // No trailing comma
         let set = bstset![99];
 
-        let items: Vec<_> = set.iter_preorder().copied().collect();
+        let items: Vec<_> = set.iter_inorder().copied().collect();
         assert_eq!(&items, &[99]);
 
         // Zero items
         let set = bstset!();
 
-        let items: Vec<i32> = set.iter_preorder().copied().collect();
+        let items: Vec<i32> = set.iter_inorder().copied().collect();
         assert_eq!(&items, &[]);
     }
 }
