@@ -4,6 +4,7 @@ use std::collections::{BTreeSet, HashSet};
 
 use rand::prelude::*;
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use simple_bst::SimpleBSTSet;
 
 use bst::BSTSet;
 
@@ -70,6 +71,7 @@ macro_rules! impl_set {
 
 impl_set!(HashSet, Hash + Eq);
 impl_set!(BTreeSet, Ord);
+impl_set!(SimpleBSTSet, Ord);
 impl_set!(BSTSet, Ord);
 
 #[derive(Debug, Clone)]
@@ -207,6 +209,9 @@ pub fn bench_set_insert(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("BTreeSet", inserts), inserts, |b, &inserts| {
             b.iter(|| benchmark_inserts::<BTreeSet<i64>>(&values, inserts))
         });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTSet", inserts), inserts, |b, &inserts| {
+            b.iter(|| benchmark_inserts::<SimpleBSTSet<i64>>(&values, inserts))
+        });
         group.bench_with_input(BenchmarkId::new("BSTSet", inserts), inserts, |b, &inserts| {
             b.iter(|| benchmark_inserts::<BSTSet<i64>>(&values, inserts))
         });
@@ -229,6 +234,10 @@ pub fn bench_set_get(c: &mut Criterion) {
             let mut set = setup_benchmark_gets(&values, gets);
             b.iter(|| benchmark_gets::<BTreeSet<i64>>(&values, &mut set, gets))
         });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTSet", gets), gets, |b, &gets| {
+            let mut set = setup_benchmark_gets(&values, gets);
+            b.iter(|| benchmark_gets::<SimpleBSTSet<i64>>(&values, &mut set, gets))
+        });
         group.bench_with_input(BenchmarkId::new("BSTSet", gets), gets, |b, &gets| {
             let mut set = setup_benchmark_gets(&values, gets);
             b.iter(|| benchmark_gets::<BSTSet<i64>>(&values, &mut set, gets))
@@ -250,6 +259,9 @@ pub fn bench_set_ops(c: &mut Criterion) {
         });
         group.bench_with_input(BenchmarkId::new("BTreeSet", steps), steps, |b, &steps| {
             b.iter(|| benchmark_set_ops::<BTreeSet<i64>>(&values, steps))
+        });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTSet", steps), steps, |b, &steps| {
+            b.iter(|| benchmark_set_ops::<SimpleBSTSet<i64>>(&values, steps))
         });
         group.bench_with_input(BenchmarkId::new("BSTSet", steps), steps, |b, &steps| {
             b.iter(|| benchmark_set_ops::<BSTSet<i64>>(&values, steps))
