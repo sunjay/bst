@@ -34,7 +34,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all-targets
+          args: --all --all-targets
         env:
           RUSTFLAGS: -D warnings
 
@@ -42,6 +42,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
+          args: --all
         env:
           RUSTFLAGS: -D warnings
 
@@ -49,6 +50,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --all
         env:
           RUSTFLAGS: -D warnings
 
@@ -66,4 +68,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: miri
-          args: test
+          args: test --all

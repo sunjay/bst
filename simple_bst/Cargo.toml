@@ -1,29 +1,14 @@
-[workspace]
-members = ["simple_bst"]
-
 [package]
-name = "bst"
+name = "simple_bst"
 version = "0.1.0"
 authors = ["Sunjay Varma <varma.sunjay@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-bench = false
-
 [dependencies]
 
 [dev-dependencies]
 rand = "0.8"
 rayon = "1.5"
-criterion = "0.3"
 cfg-if = "1.0"
-
-[[bench]]
-name = "map_comparison"
-harness = false
-
-[[bench]]
-name = "set_comparison"
-harness = false
