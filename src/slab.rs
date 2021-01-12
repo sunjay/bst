@@ -225,3 +225,30 @@ impl<T> Drop for UnsafeSlab<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ptr_api() {
+        let ptr = Ptr::new(0).unwrap();
+        assert_eq!(ptr.into_index(), Some(0));
+        assert!(!ptr.is_null());
+
+        let ptr = Ptr::new(1).unwrap();
+        assert_eq!(ptr.into_index(), Some(1));
+        assert!(!ptr.is_null());
+
+        let ptr = Ptr::new(5).unwrap();
+        assert_eq!(ptr.into_index(), Some(5));
+        assert!(!ptr.is_null());
+
+        let ptr = Ptr::new(usize::MAX);
+        assert_eq!(ptr, None);
+
+        let ptr = Ptr::null();
+        assert_eq!(ptr.into_index(), None);
+        assert!(ptr.is_null());
+    }
+}
