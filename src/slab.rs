@@ -15,7 +15,7 @@ impl Default for Ptr {
 }
 
 impl Ptr {
-    pub fn new(index: usize) -> Option<Self> {
+    fn new(index: usize) -> Option<Self> {
         if index == usize::MAX {
             None
         } else {
@@ -69,6 +69,8 @@ pub struct UnsafeSlab<T> {
     items: Vec<Entry<T>>,
     /// The index of the first entry in the free list or Ptr::null() if the free list is empty
     free_list_head: Ptr,
+    /// The length of the free list
+    free_len: usize,
 }
 
 impl<T> Default for UnsafeSlab<T> {
@@ -76,13 +78,52 @@ impl<T> Default for UnsafeSlab<T> {
         Self {
             items: Vec::default(),
             free_list_head: Ptr::null(),
+            free_len: 0,
         }
     }
 }
 
 impl<T> UnsafeSlab<T> {
+    /// Creates an empty slab
+    ///
+    /// The slab is initially created with a capacity of 0, so it will not allocate until it is
+    /// first inserted into.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates an empty slab with the specified capacity.
+    ///
+    /// The slab will be able to hold at least `capacity` elements without reallocating. If
+    /// `capacity` is 0, the slab will not allocate.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            items: Vec::with_capacity(capacity),
+            ..Self::default()
+        }
+    }
+
+    /// Returns the number of entries that contain values
+    pub fn len(&self) -> usize {
+        self.items.len() - self.free_len
+    }
+
+    /// Returns true if the slab is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the number of free (removed) slots in the slab
+    pub fn free_len(&self) -> usize {
+        self.free_len
+    }
+
+    /// Returns the number of elements the slab can hold without reallocating.
+    ///
+    /// This number is a lower bound; the slab might be able to hold more, but is guaranteed to be
+    /// able to hold at least this many.
+    pub fn capacity(&self) -> usize {
+        self.items.capacity()
     }
 
     pub unsafe fn get_unchecked(&self, index: usize) -> &T {
@@ -103,6 +144,7 @@ impl<T> UnsafeSlab<T> {
             // Safety: All items on the free list are guaranteed to be FreeEntry structs
             let next_free = unsafe { entry.free }.next_free;
             self.free_list_head = next_free;
+            self.free_len -= 1;
 
             // No need to worry about dropping FreeEntry because it is Copy
             *entry = Entry {value: ManuallyDrop::new(value)};
@@ -126,7 +168,12 @@ impl<T> UnsafeSlab<T> {
             free: FreeEntry {next_free: self.free_list_head},
         });
         self.free_list_head = Ptr::new_unchecked(index);
+        self.free_len += 1;
         ManuallyDrop::into_inner(prev_value.value)
+    }
+
+    pub fn clear(&mut self) {
+        *self = Self::default();
     }
 
     pub fn reserve(&mut self, additional: usize) {
@@ -142,14 +189,16 @@ impl<T> UnsafeSlab<T> {
 impl<T> Drop for UnsafeSlab<T> {
     fn drop(&mut self) {
         // Fast path: ignore if `T` does not need to be dropped
-        if !mem::needs_drop::<T>() {
+        //                or if all items are free already
+        if !mem::needs_drop::<T>() || self.free_len == self.items.len() {
             return;
         }
 
         use std::collections::HashSet;
 
         // Record the indexes that are in the free list
-        let mut free_indexes = HashSet::new();
+        //TODO: We can use `bitvec::BitVec` instead of `HashSet` to save on space
+        let mut free_indexes = HashSet::with_capacity(self.free_len);
 
         let mut current = self.free_list_head;
         while let Some(index) = current.into_index() {
