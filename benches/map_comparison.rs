@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use rand::prelude::*;
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use simple_bst::SimpleBSTMap;
 
 use bst::BSTMap;
 
@@ -70,6 +71,7 @@ macro_rules! impl_map {
 
 impl_map!(HashMap, Hash + Eq);
 impl_map!(BTreeMap, Ord);
+impl_map!(SimpleBSTMap, Ord);
 impl_map!(BSTMap, Ord);
 
 #[derive(Debug, Clone)]
@@ -211,6 +213,9 @@ pub fn bench_map_insert(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("BTreeMap", inserts), inserts, |b, &inserts| {
             b.iter(|| benchmark_inserts::<BTreeMap<i64, usize>>(&keys, inserts))
         });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", inserts), inserts, |b, &inserts| {
+            b.iter(|| benchmark_inserts::<SimpleBSTMap<i64, usize>>(&keys, inserts))
+        });
         group.bench_with_input(BenchmarkId::new("BSTMap", inserts), inserts, |b, &inserts| {
             b.iter(|| benchmark_inserts::<BSTMap<i64, usize>>(&keys, inserts))
         });
@@ -233,6 +238,10 @@ pub fn bench_map_get(c: &mut Criterion) {
             let mut map = setup_benchmark_gets(&keys, gets);
             b.iter(|| benchmark_gets::<BTreeMap<i64, usize>>(&keys, &mut map, gets))
         });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", gets), gets, |b, &gets| {
+            let mut map = setup_benchmark_gets(&keys, gets);
+            b.iter(|| benchmark_gets::<SimpleBSTMap<i64, usize>>(&keys, &mut map, gets))
+        });
         group.bench_with_input(BenchmarkId::new("BSTMap", gets), gets, |b, &gets| {
             let mut map = setup_benchmark_gets(&keys, gets);
             b.iter(|| benchmark_gets::<BSTMap<i64, usize>>(&keys, &mut map, gets))
@@ -254,6 +263,9 @@ pub fn bench_map_ops(c: &mut Criterion) {
         });
         group.bench_with_input(BenchmarkId::new("BTreeMap", steps), steps, |b, &steps| {
             b.iter(|| benchmark_map_ops::<BTreeMap<i64, usize>>(&keys, steps))
+        });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", steps), steps, |b, &steps| {
+            b.iter(|| benchmark_map_ops::<SimpleBSTMap<i64, usize>>(&keys, steps))
         });
         group.bench_with_input(BenchmarkId::new("BSTMap", steps), steps, |b, &steps| {
             b.iter(|| benchmark_map_ops::<BSTMap<i64, usize>>(&keys, steps))
