@@ -201,7 +201,7 @@ pub fn bench_set_insert(c: &mut Criterion) {
 
     let values = Values::generate(slice_max(INSERTS) as u32);
 
-    let mut group = c.benchmark_group("insert");
+    let mut group = c.benchmark_group("set insert");
     for inserts in INSERTS {
         group.bench_with_input(BenchmarkId::new("HashSet", inserts), inserts, |b, &inserts| {
             b.iter(|| benchmark_inserts::<HashSet<i64>>(&values, inserts))
@@ -224,7 +224,7 @@ pub fn bench_set_get(c: &mut Criterion) {
 
     let values = Values::generate(slice_max(GETS) as u32);
 
-    let mut group = c.benchmark_group("get");
+    let mut group = c.benchmark_group("set get");
     for gets in GETS {
         group.bench_with_input(BenchmarkId::new("HashSet", gets), gets, |b, &gets| {
             let mut set = setup_benchmark_gets(&values, gets);

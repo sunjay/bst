@@ -205,7 +205,7 @@ pub fn bench_map_insert(c: &mut Criterion) {
 
     let keys = Keys::generate(slice_max(INSERTS) as u32);
 
-    let mut group = c.benchmark_group("insert");
+    let mut group = c.benchmark_group("map insert");
     for inserts in INSERTS {
         group.bench_with_input(BenchmarkId::new("HashMap", inserts), inserts, |b, &inserts| {
             b.iter(|| benchmark_inserts::<HashMap<i64, usize>>(&keys, inserts))
@@ -228,7 +228,7 @@ pub fn bench_map_get(c: &mut Criterion) {
 
     let keys = Keys::generate(slice_max(GETS) as u32);
 
-    let mut group = c.benchmark_group("get");
+    let mut group = c.benchmark_group("map get");
     for gets in GETS {
         group.bench_with_input(BenchmarkId::new("HashMap", gets), gets, |b, &gets| {
             let mut map = setup_benchmark_gets(&keys, gets);
