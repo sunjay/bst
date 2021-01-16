@@ -8,7 +8,7 @@ use simple_bst::SimpleBSTMap;
 
 use bst::BSTMap;
 
-trait Map<K, V> {
+trait Map<K, V>: Clone {
     fn new() -> Self;
 
     fn len(&self) -> usize;
@@ -30,7 +30,7 @@ trait Map<K, V> {
 
 macro_rules! impl_map {
     ($name:ident, $bound:ident $(+ $other_bound:ident)*) => {
-        impl<K, V> Map<K, V> for $name<K, V>
+        impl<K: Clone, V: Clone> Map<K, V> for $name<K, V>
             where K: $bound $(+ $other_bound)*,
         {
             fn new() -> Self {
@@ -200,6 +200,45 @@ fn benchmark_map_ops<M: Map<i64, usize>>(keys: &Keys, steps: usize) -> M {
     map
 }
 
+/// Runs many consecutive inserts on a map
+fn benchmark_inserts_multi<M: Map<i64, usize>>(keys: &Keys, inserts: usize, n: usize) -> Vec<M> {
+    let mut maps = vec![M::new(); n];
+
+    for key_i in 0..inserts {
+        for map in &mut maps {
+            black_box(map.insert(keys.get(key_i as i64), key_i));
+        }
+    }
+
+    maps
+}
+
+/// Setup function for benchmark_gets
+fn setup_benchmark_gets_multi<M: Map<i64, usize>>(keys: &Keys, gets: usize, n: usize) -> Vec<M> {
+    let mut maps = vec![M::new(); n];
+
+    for key_i in 0..gets {
+        for map in &mut maps {
+            black_box(map.insert(keys.get(key_i as i64), key_i));
+        }
+    }
+
+    maps
+}
+
+/// Runs many consecutive get operations on a map
+fn benchmark_gets_multi<M: Map<i64, usize>>(keys: &Keys, maps: &mut Vec<M>, gets: usize) {
+    for i in 0..gets {
+        for map in &mut *maps {
+            // Get keys in the opposite order to how they were inserted
+            let key_i = gets - i - 1;
+            let key = keys.get(key_i as i64);
+            black_box(map.get(&key));
+            black_box(map.get_mut(&key));
+        }
+    }
+}
+
 pub fn bench_map_insert(c: &mut Criterion) {
     const INSERTS: &[usize] = &[50, 100, 500, 1000, 2000];
 
@@ -269,6 +308,58 @@ pub fn bench_map_ops(c: &mut Criterion) {
         });
         group.bench_with_input(BenchmarkId::new("BSTMap", steps), steps, |b, &steps| {
             b.iter(|| benchmark_map_ops::<BSTMap<i64, usize>>(&keys, steps))
+        });
+    }
+    group.finish();
+}
+
+pub fn bench_map_insert_multi(c: &mut Criterion) {
+    const MAPS: usize = 5;
+    const INSERTS: &[usize] = &[50, 100, 500, 1000, 2000];
+
+    let keys = Keys::generate(slice_max(INSERTS) as u32);
+
+    let mut group = c.benchmark_group("map insert multi");
+    for inserts in INSERTS {
+        group.bench_with_input(BenchmarkId::new("HashMap", inserts), inserts, |b, &inserts| {
+            b.iter(|| benchmark_inserts_multi::<HashMap<i64, usize>>(&keys, inserts, MAPS))
+        });
+        group.bench_with_input(BenchmarkId::new("BTreeMap", inserts), inserts, |b, &inserts| {
+            b.iter(|| benchmark_inserts_multi::<BTreeMap<i64, usize>>(&keys, inserts, MAPS))
+        });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", inserts), inserts, |b, &inserts| {
+            b.iter(|| benchmark_inserts_multi::<SimpleBSTMap<i64, usize>>(&keys, inserts, MAPS))
+        });
+        group.bench_with_input(BenchmarkId::new("BSTMap", inserts), inserts, |b, &inserts| {
+            b.iter(|| benchmark_inserts_multi::<BSTMap<i64, usize>>(&keys, inserts, MAPS))
+        });
+    }
+    group.finish();
+}
+
+pub fn bench_map_get_multi(c: &mut Criterion) {
+    const MAPS: usize = 5;
+    const GETS: &[usize] = &[50, 100, 500, 1000, 2000];
+
+    let keys = Keys::generate(slice_max(GETS) as u32);
+
+    let mut group = c.benchmark_group("map get multi");
+    for gets in GETS {
+        group.bench_with_input(BenchmarkId::new("HashMap", gets), gets, |b, &gets| {
+            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
+            b.iter(|| benchmark_gets_multi::<HashMap<i64, usize>>(&keys, &mut map, gets))
+        });
+        group.bench_with_input(BenchmarkId::new("BTreeMap", gets), gets, |b, &gets| {
+            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
+            b.iter(|| benchmark_gets_multi::<BTreeMap<i64, usize>>(&keys, &mut map, gets))
+        });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", gets), gets, |b, &gets| {
+            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
+            b.iter(|| benchmark_gets_multi::<SimpleBSTMap<i64, usize>>(&keys, &mut map, gets))
+        });
+        group.bench_with_input(BenchmarkId::new("BSTMap", gets), gets, |b, &gets| {
+            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
+            b.iter(|| benchmark_gets_multi::<BSTMap<i64, usize>>(&keys, &mut map, gets))
         });
     }
     group.finish();
