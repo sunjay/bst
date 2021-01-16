@@ -240,7 +240,7 @@ fn benchmark_gets_multi<M: Map<i64, usize>>(keys: &Keys, maps: &mut Vec<M>, gets
 }
 
 pub fn bench_map_insert(c: &mut Criterion) {
-    const INSERTS: &[usize] = &[50, 100, 500, 1000, 2000];
+    const INSERTS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
     let keys = Keys::generate(slice_max(INSERTS) as u32);
 
@@ -263,7 +263,7 @@ pub fn bench_map_insert(c: &mut Criterion) {
 }
 
 pub fn bench_map_get(c: &mut Criterion) {
-    const GETS: &[usize] = &[50, 100, 500, 1000, 2000];
+    const GETS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
     let keys = Keys::generate(slice_max(GETS) as u32);
 
@@ -290,7 +290,7 @@ pub fn bench_map_get(c: &mut Criterion) {
 }
 
 pub fn bench_map_ops(c: &mut Criterion) {
-    const STEPS: &[usize] = &[50, 100, 1000, 2000, 4000];
+    const STEPS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
     // Using (max * 5) because we do up to `MAX_INSERTS` inserts per step
     let keys = Keys::generate(slice_max(STEPS) as u32 * 5);
@@ -315,7 +315,7 @@ pub fn bench_map_ops(c: &mut Criterion) {
 
 pub fn bench_map_insert_multi(c: &mut Criterion) {
     const MAPS: usize = 5;
-    const INSERTS: &[usize] = &[50, 100, 500, 1000, 2000];
+    const INSERTS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
     let keys = Keys::generate(slice_max(INSERTS) as u32);
 
@@ -339,7 +339,7 @@ pub fn bench_map_insert_multi(c: &mut Criterion) {
 
 pub fn bench_map_get_multi(c: &mut Criterion) {
     const MAPS: usize = 5;
-    const GETS: &[usize] = &[50, 100, 500, 1000, 2000];
+    const GETS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
     let keys = Keys::generate(slice_max(GETS) as u32);
 
