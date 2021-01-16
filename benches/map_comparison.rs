@@ -3,7 +3,15 @@ use std::hash::Hash;
 use std::collections::{BTreeMap, HashMap};
 
 use rand::prelude::*;
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{
+    BenchmarkGroup,
+    BenchmarkId,
+    Criterion,
+    black_box,
+    criterion_group,
+    criterion_main,
+    measurement::WallTime,
+};
 use simple_bst::SimpleBSTMap;
 
 use bst::BSTMap;
@@ -242,22 +250,26 @@ fn benchmark_gets_multi<M: Map<i64, usize>>(keys: &Keys, maps: &mut Vec<M>, gets
 pub fn bench_map_insert(c: &mut Criterion) {
     const INSERTS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
+    #[inline(always)]
+    fn bench<M: Map<i64, usize>>(
+        name: &'static str,
+        group: &mut BenchmarkGroup<WallTime>,
+        keys: &Keys,
+        inserts: &usize,
+    ) {
+        group.bench_with_input(BenchmarkId::new(name, inserts), inserts, |b, &inserts| {
+            b.iter(|| benchmark_inserts::<M>(&keys, inserts))
+        });
+    }
+
     let keys = Keys::generate(slice_max(INSERTS) as u32);
 
     let mut group = c.benchmark_group("map insert");
     for inserts in INSERTS {
-        group.bench_with_input(BenchmarkId::new("HashMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts::<HashMap<i64, usize>>(&keys, inserts))
-        });
-        group.bench_with_input(BenchmarkId::new("BTreeMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts::<BTreeMap<i64, usize>>(&keys, inserts))
-        });
-        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts::<SimpleBSTMap<i64, usize>>(&keys, inserts))
-        });
-        group.bench_with_input(BenchmarkId::new("BSTMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts::<BSTMap<i64, usize>>(&keys, inserts))
-        });
+        bench::<HashMap<i64, usize>>("HashMap", &mut group, &keys, inserts);
+        bench::<BTreeMap<i64, usize>>("BTreeMap", &mut group, &keys, inserts);
+        bench::<SimpleBSTMap<i64, usize>>("SimpleBSTMap", &mut group, &keys, inserts);
+        bench::<BSTMap<i64, usize>>("BSTMap", &mut group, &keys, inserts);
     }
     group.finish();
 }
@@ -265,26 +277,27 @@ pub fn bench_map_insert(c: &mut Criterion) {
 pub fn bench_map_get(c: &mut Criterion) {
     const GETS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
+    #[inline(always)]
+    fn bench<M: Map<i64, usize>>(
+        name: &'static str,
+        group: &mut BenchmarkGroup<WallTime>,
+        keys: &Keys,
+        gets: &usize,
+    ) {
+        group.bench_with_input(BenchmarkId::new(name, gets), gets, |b, &gets| {
+            let mut map = setup_benchmark_gets(&keys, gets);
+            b.iter(|| benchmark_gets::<M>(&keys, &mut map, gets))
+        });
+    }
+
     let keys = Keys::generate(slice_max(GETS) as u32);
 
     let mut group = c.benchmark_group("map get");
     for gets in GETS {
-        group.bench_with_input(BenchmarkId::new("HashMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets(&keys, gets);
-            b.iter(|| benchmark_gets::<HashMap<i64, usize>>(&keys, &mut map, gets))
-        });
-        group.bench_with_input(BenchmarkId::new("BTreeMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets(&keys, gets);
-            b.iter(|| benchmark_gets::<BTreeMap<i64, usize>>(&keys, &mut map, gets))
-        });
-        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets(&keys, gets);
-            b.iter(|| benchmark_gets::<SimpleBSTMap<i64, usize>>(&keys, &mut map, gets))
-        });
-        group.bench_with_input(BenchmarkId::new("BSTMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets(&keys, gets);
-            b.iter(|| benchmark_gets::<BSTMap<i64, usize>>(&keys, &mut map, gets))
-        });
+        bench::<HashMap<i64, usize>>("HashMap", &mut group, &keys, gets);
+        bench::<BTreeMap<i64, usize>>("BTreeMap", &mut group, &keys, gets);
+        bench::<SimpleBSTMap<i64, usize>>("SimpleBSTMap", &mut group, &keys, gets);
+        bench::<BSTMap<i64, usize>>("BSTMap", &mut group, &keys, gets);
     }
     group.finish();
 }
@@ -292,23 +305,27 @@ pub fn bench_map_get(c: &mut Criterion) {
 pub fn bench_map_ops(c: &mut Criterion) {
     const STEPS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
+    #[inline(always)]
+    fn bench<M: Map<i64, usize>>(
+        name: &'static str,
+        group: &mut BenchmarkGroup<WallTime>,
+        keys: &Keys,
+        steps: &usize,
+    ) {
+        group.bench_with_input(BenchmarkId::new(name, steps), steps, |b, &steps| {
+            b.iter(|| benchmark_map_ops::<M>(&keys, steps))
+        });
+    }
+
     // Using (max * 5) because we do up to `MAX_INSERTS` inserts per step
     let keys = Keys::generate(slice_max(STEPS) as u32 * 5);
 
     let mut group = c.benchmark_group("map operations");
     for steps in STEPS {
-        group.bench_with_input(BenchmarkId::new("HashMap", steps), steps, |b, &steps| {
-            b.iter(|| benchmark_map_ops::<HashMap<i64, usize>>(&keys, steps))
-        });
-        group.bench_with_input(BenchmarkId::new("BTreeMap", steps), steps, |b, &steps| {
-            b.iter(|| benchmark_map_ops::<BTreeMap<i64, usize>>(&keys, steps))
-        });
-        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", steps), steps, |b, &steps| {
-            b.iter(|| benchmark_map_ops::<SimpleBSTMap<i64, usize>>(&keys, steps))
-        });
-        group.bench_with_input(BenchmarkId::new("BSTMap", steps), steps, |b, &steps| {
-            b.iter(|| benchmark_map_ops::<BSTMap<i64, usize>>(&keys, steps))
-        });
+        bench::<HashMap<i64, usize>>("HashMap", &mut group, &keys, steps);
+        bench::<BTreeMap<i64, usize>>("BTreeMap", &mut group, &keys, steps);
+        bench::<SimpleBSTMap<i64, usize>>("SimpleBSTMap", &mut group, &keys, steps);
+        bench::<BSTMap<i64, usize>>("BSTMap", &mut group, &keys, steps);
     }
     group.finish();
 }
@@ -317,22 +334,26 @@ pub fn bench_map_insert_multi(c: &mut Criterion) {
     const MAPS: usize = 5;
     const INSERTS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
+    #[inline(always)]
+    fn bench<M: Map<i64, usize>>(
+        name: &'static str,
+        group: &mut BenchmarkGroup<WallTime>,
+        keys: &Keys,
+        inserts: &usize,
+    ) {
+        group.bench_with_input(BenchmarkId::new(name, inserts), inserts, |b, &inserts| {
+            b.iter(|| benchmark_inserts_multi::<M>(&keys, inserts, MAPS))
+        });
+    }
+
     let keys = Keys::generate(slice_max(INSERTS) as u32);
 
     let mut group = c.benchmark_group("map insert multi");
     for inserts in INSERTS {
-        group.bench_with_input(BenchmarkId::new("HashMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts_multi::<HashMap<i64, usize>>(&keys, inserts, MAPS))
-        });
-        group.bench_with_input(BenchmarkId::new("BTreeMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts_multi::<BTreeMap<i64, usize>>(&keys, inserts, MAPS))
-        });
-        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts_multi::<SimpleBSTMap<i64, usize>>(&keys, inserts, MAPS))
-        });
-        group.bench_with_input(BenchmarkId::new("BSTMap", inserts), inserts, |b, &inserts| {
-            b.iter(|| benchmark_inserts_multi::<BSTMap<i64, usize>>(&keys, inserts, MAPS))
-        });
+        bench::<HashMap<i64, usize>>("HashMap", &mut group, &keys, inserts);
+        bench::<BTreeMap<i64, usize>>("BTreeMap", &mut group, &keys, inserts);
+        bench::<SimpleBSTMap<i64, usize>>("SimpleBSTMap", &mut group, &keys, inserts);
+        bench::<BSTMap<i64, usize>>("BSTMap", &mut group, &keys, inserts);
     }
     group.finish();
 }
@@ -341,26 +362,27 @@ pub fn bench_map_get_multi(c: &mut Criterion) {
     const MAPS: usize = 5;
     const GETS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
+    #[inline(always)]
+    fn bench<M: Map<i64, usize>>(
+        name: &'static str,
+        group: &mut BenchmarkGroup<WallTime>,
+        keys: &Keys,
+        gets: &usize,
+    ) {
+        group.bench_with_input(BenchmarkId::new(name, gets), gets, |b, &gets| {
+            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
+            b.iter(|| benchmark_gets_multi::<M>(&keys, &mut map, gets))
+        });
+    }
+
     let keys = Keys::generate(slice_max(GETS) as u32);
 
     let mut group = c.benchmark_group("map get multi");
     for gets in GETS {
-        group.bench_with_input(BenchmarkId::new("HashMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
-            b.iter(|| benchmark_gets_multi::<HashMap<i64, usize>>(&keys, &mut map, gets))
-        });
-        group.bench_with_input(BenchmarkId::new("BTreeMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
-            b.iter(|| benchmark_gets_multi::<BTreeMap<i64, usize>>(&keys, &mut map, gets))
-        });
-        group.bench_with_input(BenchmarkId::new("SimpleBSTMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
-            b.iter(|| benchmark_gets_multi::<SimpleBSTMap<i64, usize>>(&keys, &mut map, gets))
-        });
-        group.bench_with_input(BenchmarkId::new("BSTMap", gets), gets, |b, &gets| {
-            let mut map = setup_benchmark_gets_multi(&keys, gets, MAPS);
-            b.iter(|| benchmark_gets_multi::<BSTMap<i64, usize>>(&keys, &mut map, gets))
-        });
+        bench::<HashMap<i64, usize>>("HashMap", &mut group, &keys, gets);
+        bench::<BTreeMap<i64, usize>>("BTreeMap", &mut group, &keys, gets);
+        bench::<SimpleBSTMap<i64, usize>>("SimpleBSTMap", &mut group, &keys, gets);
+        bench::<BSTMap<i64, usize>>("BSTMap", &mut group, &keys, gets);
     }
     group.finish();
 }
