@@ -6,6 +6,7 @@
 pub(crate) struct NodeIndex(usize);
 
 impl Default for NodeIndex {
+    #[inline(always)]
     fn default() -> Self {
         // Default to no node
         NodeIndex(usize::MAX)
@@ -13,6 +14,7 @@ impl Default for NodeIndex {
 }
 
 impl NodeIndex {
+    #[inline(always)]
     pub fn new(value: usize) -> Option<Self> {
         if value == usize::MAX {
             None
@@ -21,6 +23,7 @@ impl NodeIndex {
         }
     }
 
+    #[inline(always)]
     pub fn into_index(self) -> Option<usize> {
         let NodeIndex(index) = self;
         if index == usize::MAX {
@@ -30,6 +33,7 @@ impl NodeIndex {
         }
     }
 
+    #[inline(always)]
     pub fn is_none(self) -> bool {
         self.0 == usize::MAX
     }
