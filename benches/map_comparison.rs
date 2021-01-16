@@ -391,6 +391,8 @@ criterion_group!(benches,
     bench_map_insert,
     bench_map_get,
     bench_map_ops,
+    bench_map_insert_multi,
+    bench_map_get_multi,
 );
 
 criterion_main!(benches);
