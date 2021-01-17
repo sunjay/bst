@@ -77,10 +77,6 @@ pub struct UnsafeSlab<T> {
     free_list_head: Ptr,
     /// The length of the free list
     free_len: usize,
-    /// The first valid index into the slab (may be out-of-bounds if slab is empty)
-    ///
-    /// Entries before this index will be considered unused (i.e. free) and unreachable.
-    first_index: usize,
 }
 
 impl<T> Default for UnsafeSlab<T> {
@@ -89,7 +85,6 @@ impl<T> Default for UnsafeSlab<T> {
             items: Vec::default(),
             free_list_head: Ptr::null(),
             free_len: 0,
-            first_index: 0,
         }
     }
 }
@@ -101,24 +96,6 @@ impl<T> UnsafeSlab<T> {
     /// first inserted into.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Creates an empty slab with a starting index of 1
-    ///
-    /// The slab may allocate space in order to make 1-based indexing performant, so unlike with
-    /// `new`, the capacity is not guaranteed to be 0 when this method is used.
-    pub fn new_one_indexed() -> Self {
-        // Initialize the slab with a free entry that points to nothing. The free entry is not in
-        // the free list, so it can never be used
-        let items = vec![Entry {free: FreeEntry {next: Ptr::null()}}];
-        // A first index of 1 informs `clear` and `drop` to ignore the first entry
-        let first_index = 1;
-
-        Self {
-            items,
-            first_index,
-            ..Default::default()
-        }
     }
 
     /// Creates an empty slab with the specified capacity.
@@ -201,23 +178,6 @@ impl<T> UnsafeSlab<T> {
         self.items.push(Entry {value: ManuallyDrop::new(value)});
 
         index
-    }
-
-    /// Pushes a free slot that will never be used
-    ///
-    /// Useful for offsetting the indexes into the slab without creating a value of type `T`.
-    ///
-    /// This always pushes a new entry, and will not use a slot from the free list.
-    ///
-    /// If the slab is cleared, any wasted entries will be removed too.
-    pub fn push_wasted(&mut self) {
-        // Even though the entry will never be used, we still need to push it into a list we can use
-        // when dropping
-        let index = self.items.len();
-        //TODO: Add check for usize::MAX
-        self.items.push(Entry {wasted: WastedEntry {next: self.wasted_entry_list_head}});
-        // Safety: index is guaranteed to a valid index
-        self.wasted_entry_list_head = unsafe { Ptr::new_unchecked(index) };
     }
 
     pub unsafe fn remove(&mut self, index: usize) -> T {
