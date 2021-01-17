@@ -1,5 +1,21 @@
 use std::mem::{self, ManuallyDrop};
 
+// Source: https://docs.rs/static_assertions/1.1.0/src/static_assertions/const_assert.rs.html#52-57
+#[macro_export]
+macro_rules! const_assert {
+    ($x:expr $(,)?) => {
+        #[allow(unknown_lints, eq_op)]
+        const _: [(); 0 - !{ const ASSERT: bool = $x; ASSERT } as usize] = [];
+    };
+}
+
+#[macro_export]
+macro_rules! const_assert_eq {
+    ($x:expr, $y:expr $(,)?) => {
+        const_assert!($x == $y);
+    };
+}
+
 /// An index into a slab, or "null"
 ///
 /// This type is essentially `Option<usize>`. The value usize::MAX is
@@ -7,6 +23,11 @@ use std::mem::{self, ManuallyDrop};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct Ptr(usize);
+
+// We've designed `Ptr` to use as little space as possible to help with cache
+const_assert_eq!(mem::size_of::<Ptr>(), 8);
+// Using `Option<usize>` directly would use more space.
+const_assert_eq!(mem::size_of::<Option<usize>>(), 16);
 
 impl Default for Ptr {
     #[inline(always)]
@@ -35,6 +56,9 @@ impl Ptr {
         Ptr(usize::MAX)
     }
 
+    // Methods on this type must be `#[inline]` to help the compiler see that the `Option` values
+    // are only intermediate values used to make writing code easier. Instead of checking for `None`
+    // and then `usize::MAX`, we want the compiler to just check the latter.
     #[inline(always)]
     pub fn into_index(self) -> Option<usize> {
         let Ptr(index) = self;
@@ -57,6 +81,16 @@ union Entry<T> {
     value: ManuallyDrop<T>,
     free: FreeEntry,
 }
+
+// It is important to assert that the compiler thinks that any entry (even an entry with a type that
+// needs to be dropped) does not need to be dropped. This is necessary because we manually drop each
+// entry and we do not want the entry to be dropped twice. Having this also enables some important
+// performance improvements since `Vec` may do less work when the inner type does not need to be
+// dropped.
+const_assert!(!mem::needs_drop::<Entry<Vec<i32>>>());
+// Explicitly tracking the size of entry because we want to limit the overhead added to each entry
+// because of the free list implementation.
+const_assert_eq!(mem::size_of::<Entry<()>>(), 8); // max of 8 bytes overhead per entry
 
 /// An item in the free list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
