@@ -132,6 +132,11 @@ impl<T> UnsafeSlab<T> {
         self.items.capacity()
     }
 
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is undefined behavior even if the resulting
+    /// reference is not used. Undefined behaviour will also occur if this method is called with an
+    /// index that has been removed using the `remove` method.
     pub unsafe fn get_unchecked(&self, index: usize) -> &T {
         &self.items.get_unchecked(index).value
     }
@@ -140,6 +145,11 @@ impl<T> UnsafeSlab<T> {
         &mut self.items.get_unchecked_mut(index).value
     }
 
+    /// Pushes a value into the slab and returns the index at which it was inserted.
+    ///
+    /// The item may be inserted at the end of the list, or in a space that was previously freed
+    /// through the `remove` method. Indexes returned from this method are considered valid for use
+    /// with the get methods
     pub fn push(&mut self, value: T) -> usize {
         // Check if we can reuse some space from the free list
         if let Some(free_list_head) = self.free_list_head.into_index() {
@@ -159,6 +169,7 @@ impl<T> UnsafeSlab<T> {
         }
 
         let index = self.items.len();
+        // Since we store `Ptr` internally, we can't have usize::MAX as a valid index into the slab
         if index >= usize::MAX {
             panic!("cannot have more than usize::MAX - 1 entries in slab");
         }
@@ -191,6 +202,11 @@ impl<T> UnsafeSlab<T> {
         ManuallyDrop::into_inner(prev_value.value)
     }
 
+    /// Clears and resets the slab
+    ///
+    /// This is equivalent to dropping all allocated entries, clearing the free list, and also
+    /// removing any wasted slots. The slab returns to the default state it would have been in with
+    /// the `new` method.
     pub fn clear(&mut self) {
         *self = Self::default();
     }
@@ -269,5 +285,34 @@ mod tests {
         let ptr = Ptr::null();
         assert_eq!(ptr.into_index(), None);
         assert!(ptr.is_null());
+    }
+
+    #[test]
+    fn slab_push_remove() {
+        let mut slab = UnsafeSlab::new();
+
+        assert_eq!(slab.len(), 0);
+        assert!(slab.is_empty());
+        assert_eq!(slab.free_len(), 0);
+        assert_eq!(slab.capacity(), 0);
+
+        let index = slab.push(19384);
+        assert_eq!(unsafe { *slab.get_unchecked(index) }, 19384);
+        assert_eq!(unsafe { *slab.get_unchecked(0) }, 19384);
+
+        assert_eq!(slab.len(), 1);
+        assert!(!slab.is_empty());
+        assert_eq!(slab.free_len(), 0);
+        assert!(slab.capacity() > 0);
+    }
+
+    #[test]
+    fn slab_get() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn slab_push_wasted() {
+        unimplemented!()
     }
 }
