@@ -56,7 +56,6 @@ impl Ptr {
 union Entry<T> {
     value: ManuallyDrop<T>,
     free: FreeEntry,
-    wasted: WastedEntry,
 }
 
 /// An item in the free list
@@ -64,14 +63,6 @@ union Entry<T> {
 struct FreeEntry {
     /// The index of the next entry in the free list or `Ptr::null()` if this is the last entry in
     /// the free list
-    next: Ptr,
-}
-
-/// An item in the wasted entry list
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct WastedEntry {
-    /// The index of the next entry in the wasted entry list or `Ptr::null()` if this is the last
-    /// entry in the wasted entry list
     next: Ptr,
 }
 
@@ -86,9 +77,10 @@ pub struct UnsafeSlab<T> {
     free_list_head: Ptr,
     /// The length of the free list
     free_len: usize,
-    /// The index of the first entry in the wasted entry list or Ptr::null() if the wasted entry
-    /// list is empty
-    wasted_entry_list_head: Ptr,
+    /// The first valid index into the slab (may be out-of-bounds if slab is empty)
+    ///
+    /// Entries before this index will be considered unused (i.e. free) and unreachable.
+    first_index: usize,
 }
 
 impl<T> Default for UnsafeSlab<T> {
@@ -97,7 +89,7 @@ impl<T> Default for UnsafeSlab<T> {
             items: Vec::default(),
             free_list_head: Ptr::null(),
             free_len: 0,
-            wasted_entry_list_head: Ptr::null(),
+            first_index: 0,
         }
     }
 }
@@ -109,6 +101,24 @@ impl<T> UnsafeSlab<T> {
     /// first inserted into.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates an empty slab with a starting index of 1
+    ///
+    /// The slab may allocate space in order to make 1-based indexing performant, so unlike with
+    /// `new`, the capacity is not guaranteed to be 0 when this method is used.
+    pub fn new_one_indexed() -> Self {
+        // Initialize the slab with a free entry that points to nothing. The free entry is not in
+        // the free list, so it can never be used
+        let items = vec![Entry {free: FreeEntry {next: Ptr::null()}}];
+        // A first index of 1 informs `clear` and `drop` to ignore the first entry
+        let first_index = 1;
+
+        Self {
+            items,
+            first_index,
+            ..Default::default()
+        }
     }
 
     /// Creates an empty slab with the specified capacity.
@@ -222,7 +232,9 @@ impl<T> UnsafeSlab<T> {
 
     /// Clears and removes all entries in the slab
     ///
-    /// Note that this method has no effect on the allocated capacity of the set.
+    /// Note that this method has no effect on the allocated capacity of the slab.
+    ///
+    /// If the slab is 1-indexed, it will continue to be 1-indexed.
     pub fn clear(&mut self) {
         use std::collections::HashSet;
 
