@@ -232,6 +232,8 @@ impl<T: Ord> BSTSet<T> {
 
     /// Clears the set, removing all elements
     ///
+    /// Note that this method has no effect on the allocated capacity of the set.
+    ///
     /// # Examples
     ///
     /// ```
@@ -239,9 +241,11 @@ impl<T: Ord> BSTSet<T> {
     ///
     /// let mut set = BSTSet::new();
     /// set.insert("abc");
+    /// # let capacity = set.capacity();
     /// assert!(!set.is_empty());
     /// set.clear();
     /// assert!(set.is_empty());
+    /// # assert_eq!(set.capacity(), capacity);
     /// ```
     pub fn clear(&mut self) {
         self.items.clear();

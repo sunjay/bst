@@ -394,6 +394,8 @@ impl<K: Ord, V> BSTMap<K, V> {
 
     /// Clears the map, removing all elements
     ///
+    /// Note that this method has no effect on the allocated capacity of the map.
+    ///
     /// # Examples
     ///
     /// ```
@@ -401,12 +403,17 @@ impl<K: Ord, V> BSTMap<K, V> {
     ///
     /// let mut map = BSTMap::new();
     /// map.insert(1, "a");
+    /// # let capacity = map.capacity();
     /// assert!(!map.is_empty());
     /// map.clear();
     /// assert!(map.is_empty());
+    /// # assert_eq!(map.capacity(), capacity);
     /// ```
     pub fn clear(&mut self) {
-        *self = Self::new();
+        let Self {nodes, root} = self;
+
+        nodes.clear();
+        *root = NodeIndex::default();
     }
 
     /// Performs a pre-order traversal of the tree
