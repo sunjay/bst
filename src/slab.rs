@@ -101,15 +101,24 @@ struct FreeEntry {
     next: Ptr,
 }
 
-/// An allocation primitive similar to `Vec`, but implemented with a free list to make removals
-/// cheap and to allow spots from removed items to be reused
+/// An allocation primitive similar to `Vec`, but implemented to reuse space from removed entries.
 ///
-/// The slab is unsafe because it does not add information to each entry in order to determine
-/// whether it is free or not. That means that using the unsafe get methods may result in undefined
-/// behaviour if those methods are called with an index that was previously removed.
+/// Items are kept contiguously in memory, but indexes are not shifted when an individual item is
+/// removed. Instead of always pushing items after the previously pushed item, this data structure
+/// will reuse space from previously removed entries when possible. This makes removal cheaper than
+/// a standard `Vec<T>`.
+///
+/// The slab is unsafe because it does not explicitly add data to each entry to track whether it was
+/// previously removed. That means that it is possible to call one of the unsafe get methods using
+/// an index to memory that is no longer considered initialized.
 pub struct UnsafeSlab<T> {
     items: Vec<Entry<T>>,
     /// The index of the first entry in the free list or Ptr::null() if the free list is empty
+    ///
+    /// The free list is a linked list stored in `items` that is used as a stack to track which
+    /// entries have space that can be reused in calls to `push`. This is an internal-only
+    /// implementation detail and no methods make guarantees about how the free list will be
+    /// manipulated.
     free_list_head: Ptr,
     /// The length of the free list
     free_len: usize,
@@ -163,11 +172,6 @@ impl<T> UnsafeSlab<T> {
         self.len() == 0
     }
 
-    /// Returns the number of free (removed) slots in the slab
-    pub fn free_len(&self) -> usize {
-        self.free_len
-    }
-
     /// Returns the number of elements the slab can hold without reallocating.
     ///
     /// This number is a lower bound; the slab might be able to hold more, but is guaranteed to be
@@ -176,24 +180,31 @@ impl<T> UnsafeSlab<T> {
         self.items.capacity()
     }
 
+    /// Returns a reference to a value in the slab
+    ///
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index or an index that was previously removed is
-    /// undefined behavior even if the resulting reference is not used. Undefined behaviour will
-    /// also occur if this method is called with an index that has been removed using the `remove`
-    /// method.
+    /// undefined behavior even if the resulting reference is not used.
     pub unsafe fn get_unchecked(&self, index: usize) -> &T {
         &self.items.get_unchecked(index).value
     }
 
+    /// Returns a mutable reference to a value in the slab
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index or an index that was previously removed is
+    /// undefined behavior even if the resulting reference is not used.
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
         &mut self.items.get_unchecked_mut(index).value
     }
 
     /// Pushes a value into the slab and returns the index at which it was inserted.
     ///
-    /// The item may be inserted at the end of the list, or in a space that was previously removed.
-    /// Indexes returned from this method are considered valid for use with the get methods
+    /// The item may be inserted at the end of the list, or in the space from an item was previously
+    /// removed. Indexes returned from this method are considered valid for use with the get
+    /// methods.
     pub fn push(&mut self, value: T) -> usize {
         // Check if we can reuse some space from the free list
         if let Some(free_list_head) = self.free_list_head.into_index() {
@@ -225,12 +236,16 @@ impl<T> UnsafeSlab<T> {
 
     /// Removes an item from the slab, returning its value.
     ///
+    /// Note that this method has no effect on the allocated capacity of the slab.
+    ///
     /// The space for the item will be reused in future calls to `push`. This does not move or
     /// modify any other entries in the slab. Their indexes remain the same and can still be used.
     ///
     /// Use `clear` (and possibly `shrink_to_fit`) to reclaim the space used by removed entries.
     pub unsafe fn remove(&mut self, index: usize) -> T {
         //TODO: If removing this makes len() == 0, we can clear the free list
+        //TODO: If removing from the end of the slab, we may be able to call `set_len` instead of
+        //      using the free list
         let entry = self.items.get_unchecked_mut(index);
         let prev_value = mem::replace(entry, Entry {
             free: FreeEntry {next: self.free_list_head},
@@ -240,12 +255,9 @@ impl<T> UnsafeSlab<T> {
         ManuallyDrop::into_inner(prev_value.value)
     }
 
-    /// Clears and removes all entries in the slab
+    /// Clears the slab, removing all values.
     ///
     /// Note that this method has no effect on the allocated capacity of the slab.
-    ///
-    /// This also clears the free list since there is no need to maintain that when all items in the
-    /// slab have been removed.
     ///
     /// This invalidates all previous indexes returned from `push`.
     pub fn clear(&mut self) {
@@ -350,7 +362,6 @@ mod tests {
 
         assert_eq!(slab.len(), 0);
         assert!(slab.is_empty());
-        assert_eq!(slab.free_len(), 0);
         assert_eq!(slab.capacity(), 0);
 
         // Push a single value
@@ -360,7 +371,6 @@ mod tests {
 
         assert_eq!(slab.len(), 1);
         assert!(!slab.is_empty());
-        assert_eq!(slab.free_len(), 0);
         assert!(slab.capacity() > 0);
 
         // Remove the only value in the slab
@@ -368,7 +378,6 @@ mod tests {
 
         assert_eq!(slab.len(), 0);
         assert!(slab.is_empty());
-        assert_eq!(slab.free_len(), 1);
         assert!(slab.capacity() > 0);
 
         //TODO: Push another value
@@ -474,6 +483,7 @@ mod tests {
     #[test]
     fn slab_capacity() {
         //TODO: test `with_capacity`, `capacity`, `reserve` and `shrink_to_fit`
+        //TODO: test that all methods that say they don't modify capacity actually don't
         unimplemented!()
     }
 }
