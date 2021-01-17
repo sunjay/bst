@@ -9,12 +9,14 @@ use std::mem::{self, ManuallyDrop};
 pub struct Ptr(usize);
 
 impl Default for Ptr {
+    #[inline(always)]
     fn default() -> Self {
         Self::null()
     }
 }
 
 impl Ptr {
+    #[inline(always)]
     fn new(index: usize) -> Option<Self> {
         if index == usize::MAX {
             None
@@ -23,14 +25,17 @@ impl Ptr {
         }
     }
 
+    #[inline(always)]
     pub unsafe fn new_unchecked(index: usize) -> Self {
         Ptr(index)
     }
 
+    #[inline(always)]
     pub fn null() -> Self {
         Ptr(usize::MAX)
     }
 
+    #[inline(always)]
     pub fn into_index(self) -> Option<usize> {
         let Ptr(index) = self;
         if index == usize::MAX {
@@ -40,6 +45,7 @@ impl Ptr {
         }
     }
 
+    #[inline(always)]
     pub fn is_null(self) -> bool {
         self.0 == usize::MAX
     }
