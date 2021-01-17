@@ -56,6 +56,7 @@ impl Ptr {
 union Entry<T> {
     value: ManuallyDrop<T>,
     free: FreeEntry,
+    wasted: WastedEntry,
 }
 
 /// An item in the free list
@@ -63,7 +64,15 @@ union Entry<T> {
 struct FreeEntry {
     /// The index of the next entry in the free list or `Ptr::null()` if this is the last entry in
     /// the free list
-    next_free: Ptr,
+    next: Ptr,
+}
+
+/// An item in the wasted entry list
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct WastedEntry {
+    /// The index of the next entry in the wasted entry list or `Ptr::null()` if this is the last
+    /// entry in the wasted entry list
+    next: Ptr,
 }
 
 /// An allocation primitive similar to `Vec`, but implemented with a free list to make removals
@@ -77,6 +86,9 @@ pub struct UnsafeSlab<T> {
     free_list_head: Ptr,
     /// The length of the free list
     free_len: usize,
+    /// The index of the first entry in the wasted entry list or Ptr::null() if the wasted entry
+    /// list is empty
+    wasted_entry_list_head: Ptr,
 }
 
 impl<T> Default for UnsafeSlab<T> {
@@ -85,6 +97,7 @@ impl<T> Default for UnsafeSlab<T> {
             items: Vec::default(),
             free_list_head: Ptr::null(),
             free_len: 0,
+            wasted_entry_list_head: Ptr::null(),
         }
     }
 }
@@ -134,9 +147,10 @@ impl<T> UnsafeSlab<T> {
 
     /// # Safety
     ///
-    /// Calling this method with an out-of-bounds index is undefined behavior even if the resulting
-    /// reference is not used. Undefined behaviour will also occur if this method is called with an
-    /// index that has been removed using the `remove` method.
+    /// Calling this method with an out-of-bounds index or an index that was previously removed is
+    /// undefined behavior even if the resulting reference is not used. Undefined behaviour will
+    /// also occur if this method is called with an index that has been removed using the `remove`
+    /// method.
     pub unsafe fn get_unchecked(&self, index: usize) -> &T {
         &self.items.get_unchecked(index).value
     }
@@ -158,7 +172,7 @@ impl<T> UnsafeSlab<T> {
 
             // Update the free list to point to the next free list entry
             // Safety: All items on the free list are guaranteed to be FreeEntry structs
-            let next_free = unsafe { entry.free }.next_free;
+            let next_free = unsafe { entry.free }.next;
             self.free_list_head = next_free;
             self.free_len -= 1;
 
@@ -187,28 +201,61 @@ impl<T> UnsafeSlab<T> {
     ///
     /// If the slab is cleared, any wasted entries will be removed too.
     pub fn push_wasted(&mut self) {
-        // Push a newly created free entry that points to nothing
-        // This will never be used because no item in the free list points to this
-        self.items.push(Entry {free: FreeEntry {next_free: Ptr::null()}});
+        // Even though the entry will never be used, we still need to push it into a list we can use
+        // when dropping
+        let index = self.items.len();
+        //TODO: Add check for usize::MAX
+        self.items.push(Entry {wasted: WastedEntry {next: self.wasted_entry_list_head}});
+        // Safety: index is guaranteed to a valid index
+        self.wasted_entry_list_head = unsafe { Ptr::new_unchecked(index) };
     }
 
     pub unsafe fn remove(&mut self, index: usize) -> T {
         let entry = self.items.get_unchecked_mut(index);
         let prev_value = mem::replace(entry, Entry {
-            free: FreeEntry {next_free: self.free_list_head},
+            free: FreeEntry {next: self.free_list_head},
         });
         self.free_list_head = Ptr::new_unchecked(index);
         self.free_len += 1;
         ManuallyDrop::into_inner(prev_value.value)
     }
 
-    /// Clears and resets the slab
+    /// Clears and removes all entries in the slab
     ///
-    /// This is equivalent to dropping all allocated entries, clearing the free list, and also
-    /// removing any wasted slots. The slab returns to the default state it would have been in with
-    /// the `new` method.
+    /// Note that this method has no effect on the allocated capacity of the set.
     pub fn clear(&mut self) {
-        *self = Self::default();
+        use std::collections::HashSet;
+
+        // If all items have already been freed, we don't need to do anything
+        if self.items.len() == self.free_len {
+            return;
+        }
+
+        // Record the indexes that are in the free list so we don't need to iterate through it over
+        // and over again as we go through each entry in the slab to drop them all
+        //TODO: We can use `bitvec::BitVec` instead of `HashSet` to save on space
+        let mut free_indexes = HashSet::with_capacity(self.free_len);
+
+        let mut current = self.free_list_head;
+        while let Some(index) = current.into_index() {
+            free_indexes.insert(index);
+
+            // Safety: Items on the free list are guaranteed to be valid indexes
+            let entry = unsafe { self.items.get_unchecked(index) };
+            // Safety: All items on the free list are guaranteed to be FreeEntry structs
+            let next_free = unsafe { entry.free }.next;
+            current = next_free;
+        }
+
+        for index in 0..self.items.len() {
+            if free_indexes.contains(&index) {
+                continue;
+            }
+
+            // Safety: the index is guaranteed to be in-bounds and not free since it wasn't in the
+            // free list
+            unsafe { self.remove(index); }
+        }
     }
 
     pub fn reserve(&mut self, additional: usize) {
@@ -224,40 +271,11 @@ impl<T> UnsafeSlab<T> {
 impl<T> Drop for UnsafeSlab<T> {
     fn drop(&mut self) {
         // Fast path: ignore if `T` does not need to be dropped
-        //                or if all items are free already
-        if !mem::needs_drop::<T>() || self.free_len == self.items.len() {
+        if !mem::needs_drop::<T>() {
             return;
         }
 
-        use std::collections::HashSet;
-
-        // Record the indexes that are in the free list
-        //TODO: We can use `bitvec::BitVec` instead of `HashSet` to save on space
-        let mut free_indexes = HashSet::with_capacity(self.free_len);
-
-        let mut current = self.free_list_head;
-        while let Some(index) = current.into_index() {
-            free_indexes.insert(index);
-
-            // Safety: Items on the free list are guaranteed to be valid indexes
-            let entry = unsafe { self.items.get_unchecked(index) };
-            // Safety: All items on the free list are guaranteed to be FreeEntry structs
-            let next_free = unsafe { entry.free }.next_free;
-            current = next_free;
-        }
-
-        for index in 0..self.items.len() {
-            if free_indexes.contains(&index) {
-                continue;
-            }
-
-            // Safety: The `index` is between 0 and self.items.len(), so it must be valid
-            let entry = unsafe { self.items.get_unchecked_mut(index) };
-            // Safety: The item was not on the free list, so it must be a value
-            let value = unsafe { &mut entry.value };
-            // Safety: This call only happens once because all indexes are unique
-            unsafe { ManuallyDrop::drop(value); }
-        }
+        self.clear();
     }
 }
 
@@ -314,5 +332,18 @@ mod tests {
     #[test]
     fn slab_push_wasted() {
         unimplemented!()
+    }
+
+    #[test]
+    fn slab_clear() {
+        let mut slab = UnsafeSlab::new();
+
+        slab.push("abc");
+        assert!(!slab.is_empty());
+        let capacity = slab.capacity();
+
+        slab.clear();
+        assert!(slab.is_empty());
+        assert_eq!(slab.capacity(), capacity);
     }
 }
