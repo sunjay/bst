@@ -1,4 +1,5 @@
 use std::mem::{self, ManuallyDrop};
+use std::marker::PhantomData;
 
 // Source: https://docs.rs/static_assertions/1.1.0/src/static_assertions/const_assert.rs.html#52-57
 #[macro_export]
@@ -111,6 +112,13 @@ pub struct UnsafeSlab<T> {
     free_list_head: Ptr,
     /// The length of the free list
     free_len: usize,
+    // NOTE: this marker has no consequences for variance, but is necessary for the drop checker to
+    // understand that we logically own a `T`. Needed because of our use of `ManuallyDrop<T>`.
+    //
+    // For details, see:
+    // https://forge.rust-lang.org/libs/maintaining-std.html#is-there-a-manual-drop-implementation
+    // https://github.com/rust-lang/rfcs/blob/master/text/0769-sound-generic-drop.md#phantom-data
+    _marker: PhantomData<T>,
 }
 
 impl<T> Default for UnsafeSlab<T> {
@@ -119,6 +127,7 @@ impl<T> Default for UnsafeSlab<T> {
             items: Vec::default(),
             free_list_head: Ptr::null(),
             free_len: 0,
+            _marker: PhantomData,
         }
     }
 }
@@ -266,7 +275,7 @@ impl<T> UnsafeSlab<T> {
             unsafe { ManuallyDrop::drop(value); }
         }
 
-        let Self {items, free_list_head, free_len} = self;
+        let Self {items, free_list_head, free_len, _marker} = self;
         // Clearing `items` has the effect of marking every entry as free without affecting the
         // allocated capacity.
         items.clear();
@@ -285,6 +294,8 @@ impl<T> UnsafeSlab<T> {
     }
 }
 
+//TODO: This needs a `#[may_dangle]` attribute on `T`
+// See: https://forge.rust-lang.org/libs/maintaining-std.html#is-there-a-manual-drop-implementation
 impl<T> Drop for UnsafeSlab<T> {
     fn drop(&mut self) {
         // Fast path: ignore if `T` does not need to be dropped
