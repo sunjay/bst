@@ -168,6 +168,19 @@ impl<T> UnsafeSlab<T> {
         index
     }
 
+    /// Pushes a free slot that will never be used
+    ///
+    /// Useful for offsetting the indexes into the slab without creating a value of type `T`.
+    ///
+    /// This always pushes a new entry, and will not use a slot from the free list.
+    ///
+    /// If the slab is cleared, any wasted entries will be removed too.
+    pub fn push_wasted(&mut self) {
+        // Push a newly created free entry that points to nothing
+        // This will never be used because no item in the free list points to this
+        self.items.push(Entry {free: FreeEntry {next_free: Ptr::null()}});
+    }
+
     pub unsafe fn remove(&mut self, index: usize) -> T {
         let entry = self.items.get_unchecked_mut(index);
         let prev_value = mem::replace(entry, Entry {
