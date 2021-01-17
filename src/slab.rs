@@ -347,11 +347,6 @@ mod tests {
     }
 
     #[test]
-    fn slab_push_wasted() {
-        unimplemented!()
-    }
-
-    #[test]
     fn slab_clear() {
         let mut slab = UnsafeSlab::new();
 
