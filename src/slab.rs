@@ -194,7 +194,7 @@ impl<T> UnsafeSlab<T> {
     ///
     /// Note that this method has no effect on the allocated capacity of the slab.
     ///
-    /// If the slab is 1-indexed, it will continue to be 1-indexed.
+    /// The free list of the slab will also be cleared.
     pub fn clear(&mut self) {
         use std::collections::HashSet;
 
@@ -224,10 +224,21 @@ impl<T> UnsafeSlab<T> {
                 continue;
             }
 
-            // Safety: the index is guaranteed to be in-bounds and not free since it wasn't in the
-            // free list
-            unsafe { self.remove(index); }
+            // Safety: The `index` is between 0 and self.items.len(), so it must be valid
+            let entry = unsafe { self.items.get_unchecked_mut(index) };
+            // Safety: The item was not on the free list, so it must be a value
+            let value = unsafe { &mut entry.value };
+            // Safety: This call only happens once because all indexes are unique
+            unsafe { ManuallyDrop::drop(value); }
         }
+
+        let Self {items, free_list_head, free_len} = self;
+        // Clearing `items` has the effect of marking every entry as free without affecting the
+        // allocated capacity.
+        items.clear();
+        // Need to clear the free list so we don't end up indexing out of bounds.
+        *free_list_head = Ptr::null();
+        *free_len = 0;
     }
 
     pub fn reserve(&mut self, additional: usize) {
