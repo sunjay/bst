@@ -104,8 +104,9 @@ struct FreeEntry {
 /// An allocation primitive similar to `Vec`, but implemented with a free list to make removals
 /// cheap and to allow spots from removed items to be reused
 ///
-/// The slab is unsafe because it does not explicitly track whether an individual entry is free or
-/// not. That means that certain operations like `get` are always unsafe and unchecked.
+/// The slab is unsafe because it does not add information to each entry in order to determine
+/// whether it is free or not. That means that using the unsafe get methods may result in undefined
+/// behaviour if those methods are called with an index that was previously removed.
 pub struct UnsafeSlab<T> {
     items: Vec<Entry<T>>,
     /// The index of the first entry in the free list or Ptr::null() if the free list is empty
@@ -222,7 +223,14 @@ impl<T> UnsafeSlab<T> {
         index
     }
 
+    /// Removes an item from the slab, returning its value.
+    ///
+    /// The space for the item will be reused in future calls to `push`. This does not move or
+    /// modify any other entries in the slab. Their indexes remain the same and can still be used.
+    ///
+    /// Use `clear` (and possibly `shrink_to_fit`) to reclaim the space used by removed entries.
     pub unsafe fn remove(&mut self, index: usize) -> T {
+        //TODO: If removing this makes len() == 0, we can clear the free list
         let entry = self.items.get_unchecked_mut(index);
         let prev_value = mem::replace(entry, Entry {
             free: FreeEntry {next: self.free_list_head},
