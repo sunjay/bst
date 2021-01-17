@@ -353,6 +353,7 @@ mod tests {
         assert_eq!(slab.free_len(), 0);
         assert_eq!(slab.capacity(), 0);
 
+        // Push a single value
         let index = slab.push(19384);
         assert_eq!(unsafe { *slab.get_unchecked(index) }, 19384);
         assert_eq!(unsafe { *slab.get_unchecked(0) }, 19384);
@@ -361,10 +362,27 @@ mod tests {
         assert!(!slab.is_empty());
         assert_eq!(slab.free_len(), 0);
         assert!(slab.capacity() > 0);
+
+        // Remove the only value in the slab
+        assert_eq!(unsafe { slab.remove(0) }, 19384);
+
+        assert_eq!(slab.len(), 0);
+        assert!(slab.is_empty());
+        assert_eq!(slab.free_len(), 1);
+        assert!(slab.capacity() > 0);
+
+        //TODO: Push another value
+        //TODO: Push another second value
+        //TODO: Remove the first value (second should still be available)
+        //TODO: Push another value (should end up where the first value was)
+        //TODO: Remove the second value (first value should remain)
+        //TODO: Remove the first value
+        unimplemented!();
     }
 
     #[test]
     fn slab_get() {
+        //TODO: test `get_unchecked` and `get_unchecked_mut`
         unimplemented!()
     }
 
@@ -379,5 +397,83 @@ mod tests {
         slab.clear();
         assert!(slab.is_empty());
         assert_eq!(slab.capacity(), capacity);
+    }
+
+    #[test]
+    fn drop_non_empty() {
+        use std::sync::Arc;
+
+        let mut slab = UnsafeSlab::new();
+
+        let weak_ref1;
+        let weak_ref2;
+        {
+            let value1 = Arc::new(1);
+            let value2 = Arc::new(2);
+            weak_ref1 = Arc::downgrade(&value1);
+            weak_ref2 = Arc::downgrade(&value2);
+
+            slab.push(value1);
+            slab.push(value2);
+        }
+
+        assert_eq!(*weak_ref1.upgrade().unwrap(), 1);
+        assert_eq!(*weak_ref2.upgrade().unwrap(), 2);
+
+        drop(slab);
+
+        assert!(weak_ref1.upgrade().is_none());
+        assert!(weak_ref2.upgrade().is_none());
+    }
+
+    #[test]
+    fn drop_removed() {
+        use std::sync::Arc;
+
+        let mut slab = UnsafeSlab::new();
+
+        let weak_ref1;
+        let weak_ref2;
+        {
+            let value1 = Arc::new(1);
+            let value2 = Arc::new(2);
+            weak_ref1 = Arc::downgrade(&value1);
+            weak_ref2 = Arc::downgrade(&value2);
+
+            slab.push(value1);
+            slab.push(value2);
+        }
+
+        assert_eq!(*weak_ref1.upgrade().unwrap(), 1);
+        assert_eq!(*weak_ref2.upgrade().unwrap(), 2);
+
+        let weak_ref3;
+        {
+            // Drop one of the values via remove, but then reuse the space
+            unsafe { slab.remove(0); }
+
+            let value3 = Arc::new(3);
+            weak_ref3 = Arc::downgrade(&value3);
+
+            slab.push(value3);
+        }
+
+        assert!(weak_ref1.upgrade().is_none());
+        assert_eq!(*weak_ref2.upgrade().unwrap(), 2);
+        assert_eq!(*weak_ref3.upgrade().unwrap(), 3);
+
+        // Drop all values
+        drop(slab);
+
+        assert!(weak_ref1.upgrade().is_none());
+        assert!(weak_ref2.upgrade().is_none());
+        // Value that was in the reused space should still be dropped normally
+        assert!(weak_ref3.upgrade().is_none());
+    }
+
+    #[test]
+    fn slab_capacity() {
+        //TODO: test `with_capacity`, `capacity`, `reserve` and `shrink_to_fit`
+        unimplemented!()
     }
 }
