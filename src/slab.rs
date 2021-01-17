@@ -102,7 +102,7 @@ struct FreeEntry {
 }
 
 /// An allocation primitive similar to `Vec`, but implemented with a free list to make removals
-/// cheap and to allow freed spots to be reused
+/// cheap and to allow spots from removed items to be reused
 ///
 /// The slab is unsafe because it does not explicitly track whether an individual entry is free or
 /// not. That means that certain operations like `get` are always unsafe and unchecked.
@@ -191,9 +191,8 @@ impl<T> UnsafeSlab<T> {
 
     /// Pushes a value into the slab and returns the index at which it was inserted.
     ///
-    /// The item may be inserted at the end of the list, or in a space that was previously freed
-    /// through the `remove` method. Indexes returned from this method are considered valid for use
-    /// with the get methods
+    /// The item may be inserted at the end of the list, or in a space that was previously removed.
+    /// Indexes returned from this method are considered valid for use with the get methods
     pub fn push(&mut self, value: T) -> usize {
         // Check if we can reuse some space from the free list
         if let Some(free_list_head) = self.free_list_head.into_index() {
@@ -237,7 +236,10 @@ impl<T> UnsafeSlab<T> {
     ///
     /// Note that this method has no effect on the allocated capacity of the slab.
     ///
-    /// The free list of the slab will also be cleared.
+    /// This also clears the free list since there is no need to maintain that when all items in the
+    /// slab have been removed.
+    ///
+    /// This invalidates all previous indexes returned from `push`.
     pub fn clear(&mut self) {
         use std::collections::HashSet;
 
@@ -271,7 +273,8 @@ impl<T> UnsafeSlab<T> {
             let entry = unsafe { self.items.get_unchecked_mut(index) };
             // Safety: The item was not on the free list, so it must be a value
             let value = unsafe { &mut entry.value };
-            // Safety: This call only happens once because all indexes are unique
+            // Safety: This call only happens once because `Entry` must be dropped manually and each
+            // `index` is unique
             unsafe { ManuallyDrop::drop(value); }
         }
 
