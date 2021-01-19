@@ -263,8 +263,16 @@ impl<T> UnsafeSlab<T> {
     pub fn clear(&mut self) {
         use std::collections::HashSet;
 
-        // If all items have already been freed, we don't need to do anything
-        if self.items.len() == self.free_len {
+        // If the items do not need to be dropped or if all items have already been freed, there is
+        // no need to run drop code, so we can just reset state and exit
+        if !mem::needs_drop::<T>() || self.items.len() == self.free_len {
+            self.reset_internal_state();
+
+            return;
+        }
+
+        // If there are no items, no need to do anything
+        if self.items.len() == 0 {
             return;
         }
 
@@ -298,11 +306,23 @@ impl<T> UnsafeSlab<T> {
             unsafe { ManuallyDrop::drop(value); }
         }
 
+        // All items have been dropped, so reset the internal state
+        self.reset_internal_state();
+    }
+
+    /// Reset internal state while maintaining the same capacity
+    ///
+    /// NOTE: Leaking memory is safe in Rust and Drop is never guaranteed to be run, so even though
+    /// this method can result in either of those, it is not marked unsafe. The method should only
+    /// be called once there are no more items in the slab that need to be dropped.
+    #[inline(always)]
+    fn reset_internal_state(&mut self) {
         let Self {items, free_list_head, free_len, _marker} = self;
         // Clearing `items` has the effect of marking every entry as free without affecting the
         // allocated capacity.
         items.clear();
-        // Need to clear the free list so we don't end up indexing out of bounds.
+        // Need to clear the free list so we don't end up indexing out of bounds into `items` now
+        // that has been cleared
         *free_list_head = Ptr::null();
         *free_len = 0;
     }
@@ -354,6 +374,9 @@ mod tests {
         let ptr = Ptr::null();
         assert_eq!(ptr.into_index(), None);
         assert!(ptr.is_null());
+
+        // default to the null ptr
+        assert_eq!(Ptr::default(), Ptr::null());
     }
 
     #[test]
@@ -476,9 +499,11 @@ mod tests {
 
     #[test]
     fn slab_clear() {
-        let mut slab = UnsafeSlab::new();
+        // Very important to use a type that actualy needs drop so that clear code runs
+        let mut slab: UnsafeSlab<String> = UnsafeSlab::new();
+        assert!(mem::needs_drop::<String>());
 
-        slab.push("abc");
+        slab.push("abc".to_string());
         assert!(!slab.is_empty());
         let capacity = slab.capacity();
 
@@ -492,13 +517,26 @@ mod tests {
         assert_eq!(slab.capacity(), capacity);
 
         // push 2 values and remove one, so that clear has to account for the free space
-        let index = slab.push("ddd");
-        slab.push("fff");
+        let index = slab.push("ddd".to_string());
+        slab.push("fff".to_string());
         let capacity = slab.capacity();
 
         unsafe { slab.remove(index); }
 
         assert!(!slab.is_empty());
+        slab.clear();
+        assert!(slab.is_empty());
+        assert_eq!(slab.capacity(), capacity);
+
+        // remove all values before clear
+        let index0 = slab.push("qqq".to_string());
+        let index1 = slab.push("555".to_string());
+        let capacity = slab.capacity();
+
+        unsafe { slab.remove(index1); }
+        unsafe { slab.remove(index0); }
+
+        assert!(slab.is_empty());
         slab.clear();
         assert!(slab.is_empty());
         assert_eq!(slab.capacity(), capacity);
