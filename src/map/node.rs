@@ -40,7 +40,7 @@ impl<'a, K: PartialEq, V: PartialEq> PartialEq for Node<'a, K, V> {
         // If the indexes are the same, the values are guaranteed to be equal (similar to `Arc`
         // using `ptr_eq` to optimize its `PartialEq` impl)
         let ptr_eq = ptr::eq(self.nodes, other.nodes) && self.index == other.index;
-        ptr_eq || self.key().eq(other.key()) || self.value().eq(other.value())
+        ptr_eq || (self.key().eq(other.key()) && self.value().eq(other.value()))
     }
 }
 
@@ -130,7 +130,7 @@ impl<'a, K: PartialEq, V: PartialEq> PartialEq for NodeMut<'a, K, V> {
         // If the indexes are the same, the values are guaranteed to be equal (similar to `Arc`
         // using `ptr_eq` to optimize its `PartialEq` impl)
         let ptr_eq = ptr::eq(self.nodes, other.nodes) && self.index == other.index;
-        ptr_eq || self.key().eq(other.key()) || self.value().eq(other.value())
+        ptr_eq || (self.key().eq(other.key()) && self.value().eq(other.value()))
     }
 }
 
