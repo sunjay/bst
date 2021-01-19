@@ -162,7 +162,9 @@ impl<T> UnsafeSlab<T> {
         }
     }
 
-    /// Returns the number of entries that contain values
+    /// Returns the number of entries in the slab that contain values
+    ///
+    /// This is the number of items pushed minus the number of items removed
     pub fn len(&self) -> usize {
         self.items.len() - self.free_len
     }
@@ -329,14 +331,23 @@ impl<T> UnsafeSlab<T> {
         *free_len = 0;
     }
 
+    /// Reserves capacity for at least `additional` more elements to be inserted in the slab.
+    ///
+    /// The collection may reserve more space to avoid frequent reallocations. After calling
+    /// reserve, capacity will be greater than or equal to `self.len() + additional`. Does nothing
+    /// if capacity is already sufficient.
     pub fn reserve(&mut self, additional: usize) {
         self.items.reserve(additional)
     }
 
-    //TODO: Provide an API for safe memory compaction (clears the free list while yielding indexes)
+    /// Shrinks the capacity of the vector as much as possible.
+    ///
+    /// It will drop down as close as possible to the length but may still be greater.
     pub fn shrink_to_fit(&mut self) {
         self.items.shrink_to_fit()
     }
+
+    //TODO: Provide an API for interactive memory compaction (clears the free list while yielding indexes)
 }
 
 //TODO: This needs a `#[may_dangle]` attribute on `T`
