@@ -265,14 +265,12 @@ impl<T> UnsafeSlab<T> {
 
         // If the items do not need to be dropped or if all items have already been freed, there is
         // no need to run drop code, so we can just reset state and exit
+        //
+        // Note that this also covers the case where `self.items.len() == 0` since the free list
+        // would also be empty if that was the case (the free list resides in `items`)
         if !mem::needs_drop::<T>() || self.items.len() == self.free_len {
             self.reset_internal_state();
 
-            return;
-        }
-
-        // If there are no items, no need to do anything
-        if self.items.len() == 0 {
             return;
         }
 
@@ -503,6 +501,7 @@ mod tests {
         let mut slab: UnsafeSlab<String> = UnsafeSlab::new();
         assert!(mem::needs_drop::<String>());
 
+        // push an item and clear the slab
         slab.push("abc".to_string());
         assert!(!slab.is_empty());
         let capacity = slab.capacity();
