@@ -840,4 +840,72 @@ mod tests {
         assert_eq!(find_score(map.root(), 999).map(|node| *node.key()), Some(40));
         assert_eq!(find_score(map.root(), 33).map(|node| *node.key()), Some(42));
     }
+
+    #[test]
+    fn test_eq() {
+        let mut map1 = BSTMap::new();
+
+        for i in 0..10 {
+            map1.insert(i, i);
+        }
+
+        // Reflexivity
+        assert_eq!(map1, map1);
+
+        let mut map2 = BSTMap::new();
+
+        for i in (0..10).rev() {
+            map2.insert(i, i);
+        }
+
+        // Reflexivity
+        assert_eq!(map2, map2);
+        // Symmetry
+        assert_eq!(map1, map2);
+        assert_eq!(map2, map1);
+
+        let mut map3 = BSTMap::new();
+
+        for i in 10..20 {
+            map3.insert(i, i);
+        }
+
+        // Reflexivity
+        assert_eq!(map3, map3);
+        // Completely different maps, same lengths
+        assert_eq!(map1.len(), map3.len());
+        assert_ne!(map1, map3);
+        assert_ne!(map2, map3);
+
+        let mut map4 = BSTMap::new();
+
+        for i in 10..20 {
+            // Different value
+            map4.insert(i, i * 10);
+        }
+
+        // Reflexivity
+        assert_eq!(map4, map4);
+        // Completely different maps, same lengths
+        assert_eq!(map1.len(), map4.len());
+        assert_ne!(map1, map4);
+        assert_ne!(map2, map4);
+        // Same keys, different values
+        assert_ne!(map3, map4);
+
+        let map5 = BSTMap::new();
+
+        // Reflexivity
+        assert_eq!(map5, map5);
+        // Completely different maps, different lengths
+        assert_ne!(map1.len(), map5.len());
+        assert_ne!(map1, map5);
+        assert_ne!(map2, map5);
+        assert_ne!(map3, map5);
+        assert_ne!(map4, map5);
+
+        // Empty maps should be equal
+        assert!(map5.is_empty());
+        assert_eq!(map5, BSTMap::default());
+    }
 }
