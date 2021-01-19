@@ -1,14 +1,16 @@
 use std::iter::FusedIterator;
 
+use crate::slab::UnsafeSlab;
+
 use super::{InnerNode, index::NodeIndex};
 
 pub struct IterPreorder<'a, K, V> {
-    nodes: &'a [InnerNode<K, V>],
+    nodes: &'a UnsafeSlab<InnerNode<K, V>>,
     stack: Vec<usize>,
 }
 
 impl<'a, K, V> IterPreorder<'a, K, V> {
-    pub(super) fn new(nodes: &'a [InnerNode<K, V>], root: NodeIndex) -> Self {
+    pub(super) fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, root: NodeIndex) -> Self {
         Self {
             nodes,
             stack: root.into_index().into_iter().collect(),

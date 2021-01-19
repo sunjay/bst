@@ -14,6 +14,8 @@ use std::cmp::Ordering;
 use std::borrow::Borrow;
 use std::iter::FromIterator;
 
+use crate::slab::UnsafeSlab;
+
 use index::NodeIndex;
 
 struct InnerNode<K, V> {
@@ -34,9 +36,8 @@ impl<K, V> InnerNode<K, V> {
     }
 }
 
-fn push_node<K, V>(nodes: &mut Vec<InnerNode<K, V>>, key: K, value: V) -> NodeIndex {
-    let index = nodes.len();
-    nodes.push(InnerNode::new(key, value));
+fn push_node<K, V>(nodes: &mut UnsafeSlab<InnerNode<K, V>>, key: K, value: V) -> NodeIndex {
+    let index = nodes.push(InnerNode::new(key, value));
     NodeIndex::new(index).expect("cannot have more than usize::MAX - 1 nodes")
 }
 
@@ -52,7 +53,7 @@ fn push_node<K, V>(nodes: &mut Vec<InnerNode<K, V>>, key: K, value: V) -> NodeIn
 /// The tree is not guaranteed to be structured or balanced in any particular way. The
 /// implementation may structure the tree however is needed to fulfill the BST properties.
 pub struct BSTMap<K, V> {
-    nodes: Vec<InnerNode<K, V>>,
+    nodes: UnsafeSlab<InnerNode<K, V>>,
     root: NodeIndex,
 }
 
@@ -121,7 +122,7 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            nodes: Vec::with_capacity(capacity),
+            nodes: UnsafeSlab::with_capacity(capacity),
             ..Self::default()
         }
     }

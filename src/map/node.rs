@@ -2,12 +2,14 @@ use std::ptr;
 use std::mem;
 use std::fmt;
 
+use crate::slab::UnsafeSlab;
+
 use super::{InnerNode, index::NodeIndex, push_node};
 
 /// A single node of the binary search tree
 #[derive(Clone)]
 pub struct Node<'a, K, V> {
-    nodes: &'a [InnerNode<K, V>],
+    nodes: &'a UnsafeSlab<InnerNode<K, V>>,
     /// An index into `nodes` for the node represented by this struct
     ///
     /// Guaranteed to be a valid index
@@ -50,7 +52,7 @@ impl<'a, K, V> Node<'a, K, V> {
     /// # Safety
     ///
     /// Must guarantee that `index` represents a valid index into `nodes`.
-    pub(super) unsafe fn new(nodes: &'a [InnerNode<K, V>], index: NodeIndex) -> Option<Self> {
+    pub(super) unsafe fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, index: NodeIndex) -> Option<Self> {
         index.into_index().map(|index| Self {nodes, index})
     }
 
@@ -97,7 +99,7 @@ impl<'a, K, V> Node<'a, K, V> {
 /// Note that only the value is mutable, not the key since modifying the key
 /// could result in invalidating the ordering properties.
 pub struct NodeMut<'a, K, V> {
-    nodes: &'a mut Vec<InnerNode<K, V>>,
+    nodes: &'a mut UnsafeSlab<InnerNode<K, V>>,
     /// An index into `nodes` for the node represented by this struct
     ///
     /// Guaranteed to be a valid index
@@ -140,7 +142,7 @@ impl<'a, K, V> NodeMut<'a, K, V> {
     /// # Safety
     ///
     /// Must guarantee that `index` represents a valid index into `nodes`.
-    pub(super) unsafe fn new(nodes: &'a mut Vec<InnerNode<K, V>>, index: NodeIndex) -> Option<Self> {
+    pub(super) unsafe fn new(nodes: &'a mut UnsafeSlab<InnerNode<K, V>>, index: NodeIndex) -> Option<Self> {
         index.into_index().map(move |index| Self {nodes, index})
     }
 
