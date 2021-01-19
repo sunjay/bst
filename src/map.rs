@@ -16,7 +16,6 @@ use std::iter::FromIterator;
 
 use index::NodeIndex;
 
-#[derive(Clone, PartialEq, Eq)]
 struct InnerNode<K, V> {
     key: K,
     value: V,
@@ -52,7 +51,6 @@ fn push_node<K, V>(nodes: &mut Vec<InnerNode<K, V>>, key: K, value: V) -> NodeIn
 ///
 /// The tree is not guaranteed to be structured or balanced in any particular way. The
 /// implementation may structure the tree however is needed to fulfill the BST properties.
-#[derive(Clone, PartialEq, Eq)]
 pub struct BSTMap<K, V> {
     nodes: Vec<InnerNode<K, V>>,
     root: NodeIndex,
@@ -77,6 +75,22 @@ impl<K, V> fmt::Debug for BSTMap<K, V>
             .finish()
     }
 }
+
+impl<K: Clone, V: Clone> Clone for BSTMap<K, V> {
+    fn clone(&self) -> Self {
+        //TODO: Implement `Clone` by walking the tree
+        todo!()
+    }
+}
+
+impl<K: PartialEq, V: PartialEq> PartialEq for BSTMap<K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        //TODO: Compare the two trees
+        todo!()
+    }
+}
+
+impl<K: Eq, V: Eq> Eq for BSTMap<K, V> {}
 
 impl<K: Ord, V> BSTMap<K, V> {
     /// Creates an empty `BSTMap`

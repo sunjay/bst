@@ -1,10 +1,11 @@
+use std::ptr;
 use std::mem;
 use std::fmt;
 
 use super::{InnerNode, index::NodeIndex, push_node};
 
 /// A single node of the binary search tree
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct Node<'a, K, V> {
     nodes: &'a [InnerNode<K, V>],
     /// An index into `nodes` for the node represented by this struct
@@ -14,7 +15,7 @@ pub struct Node<'a, K, V> {
 }
 
 impl<'a, K, V> fmt::Debug for Node<'a, K, V>
-    where K: Ord + fmt::Debug,
+    where K: fmt::Debug,
           V: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -27,7 +28,23 @@ impl<'a, K, V> fmt::Debug for Node<'a, K, V>
     }
 }
 
-impl<'a, K: Ord, V> Node<'a, K, V> {
+impl<'a, K: PartialEq, V: PartialEq> PartialEq for Node<'a, K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        // No need to check `left()` or `right()` since trees do not have cycles in them, you cannot
+        // have two different nodes with the same `left()` and `right()` nodes. That is, if the keys
+        // are different, the `self.left() == other.left()` and `self.right() == other.right()` will
+        // be false.
+
+        // If the indexes are the same, the values are guaranteed to be equal (similar to `Arc`
+        // using `ptr_eq` to optimize its `PartialEq` impl)
+        let ptr_eq = ptr::eq(self.nodes, other.nodes) && self.index == other.index;
+        ptr_eq || self.key().eq(other.key()) || self.value().eq(other.value())
+    }
+}
+
+impl<'a, K: Eq, V: Eq> Eq for Node<'a, K, V> {}
+
+impl<'a, K, V> Node<'a, K, V> {
     /// Creates a new `Node`
     ///
     /// # Safety
@@ -79,7 +96,6 @@ impl<'a, K: Ord, V> Node<'a, K, V> {
 ///
 /// Note that only the value is mutable, not the key since modifying the key
 /// could result in invalidating the ordering properties.
-#[derive(PartialEq, Eq)]
 pub struct NodeMut<'a, K, V> {
     nodes: &'a mut Vec<InnerNode<K, V>>,
     /// An index into `nodes` for the node represented by this struct
@@ -89,7 +105,7 @@ pub struct NodeMut<'a, K, V> {
 }
 
 impl<'a, K, V> fmt::Debug for NodeMut<'a, K, V>
-    where K: Ord + fmt::Debug,
+    where K: fmt::Debug,
           V: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -102,7 +118,23 @@ impl<'a, K, V> fmt::Debug for NodeMut<'a, K, V>
     }
 }
 
-impl<'a, K: Ord, V> NodeMut<'a, K, V> {
+impl<'a, K: PartialEq, V: PartialEq> PartialEq for NodeMut<'a, K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        // No need to check `left()` or `right()` since trees do not have cycles in them, you cannot
+        // have two different nodes with the same `left()` and `right()` nodes. That is, if the keys
+        // are different, the `self.left() == other.left()` and `self.right() == other.right()` will
+        // be false.
+
+        // If the indexes are the same, the values are guaranteed to be equal (similar to `Arc`
+        // using `ptr_eq` to optimize its `PartialEq` impl)
+        let ptr_eq = ptr::eq(self.nodes, other.nodes) && self.index == other.index;
+        ptr_eq || self.key().eq(other.key()) || self.value().eq(other.value())
+    }
+}
+
+impl<'a, K: Eq, V: Eq> Eq for NodeMut<'a, K, V> {}
+
+impl<'a, K, V> NodeMut<'a, K, V> {
     /// Creates a new `NodeMut`
     ///
     /// # Safety
