@@ -396,7 +396,7 @@ mod tests {
         assert!(!slab.is_empty());
         assert!(slab.capacity() > 0);
 
-        // Remove the first value (second should still be available)
+        // Remove the first value (second should still be available at the same index)
         assert_eq!(unsafe { slab.remove(index0) }, 831783);
         assert_eq!(unsafe { *slab.get_unchecked(index1) }, 57);
 
@@ -413,15 +413,53 @@ mod tests {
         assert!(!slab.is_empty());
         assert!(slab.capacity() > 0);
 
-        //TODO: Remove the second value (first value should remain)
-        //TODO: Remove the first value
-        unimplemented!();
+        // Remove the second value (first value should remain)
+        assert_eq!(unsafe { slab.remove(index1) }, 57);
+        assert_eq!(unsafe { *slab.get_unchecked(index2) }, 999);
+
+        assert_eq!(slab.len(), 1);
+        assert!(!slab.is_empty());
+        assert!(slab.capacity() > 0);
+
+        // Slab is dropped at the end of this scope with a single value in it
     }
 
     #[test]
-    fn slab_get() {
-        //TODO: test `get_unchecked` and `get_unchecked_mut`
-        unimplemented!()
+    fn slab_stable_get() {
+        let mut slab = UnsafeSlab::default();
+
+        let index0 = slab.push(-12);
+        assert_eq!(unsafe { *slab.get_unchecked(index0) }, -12);
+
+        // Push enough values for the capacity to change a few times
+        let initial_capacity = slab.capacity();
+        let mut indexes = Vec::new();
+        for i in 0.. {
+            indexes.push(slab.push(i as i32));
+            if slab.capacity() >= initial_capacity * 5 {
+                break;
+            }
+        }
+
+        // indexes returned from push should remain stable and usable even if the capacity changes
+        assert_eq!(unsafe { *slab.get_unchecked(index0) }, -12);
+
+        for (i, index) in indexes.iter().copied().enumerate() {
+            assert_eq!(unsafe { *slab.get_unchecked(index) }, i as i32);
+        }
+
+        // change the values
+        unsafe { *slab.get_unchecked_mut(index0) *= -1; }
+
+        for &index in &indexes {
+            unsafe { *slab.get_unchecked_mut(index) *= -1; }
+        }
+
+        // values should be changed
+        assert_eq!(unsafe { *slab.get_unchecked(index0) }, 12);
+        for (i, index) in indexes.iter().copied().enumerate() {
+            assert_eq!(unsafe { *slab.get_unchecked(index) }, i as i32 * -1);
+        }
     }
 
     #[test]
