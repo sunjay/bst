@@ -243,15 +243,19 @@ impl<T> UnsafeSlab<T> {
     ///
     /// Use `clear` (and possibly `shrink_to_fit`) to reclaim the space used by removed entries.
     pub unsafe fn remove(&mut self, index: usize) -> T {
-        //TODO: If removing this makes len() == 0, we can clear the free list
-        //TODO: If removing from the end of the slab, we may be able to call `set_len` instead of
-        //      using the free list
+        //TODO: If removing this makes len() == 0, we can call `reset_internal_state` and clear the
+        //      free list
         let entry = self.items.get_unchecked_mut(index);
+        // Retrieve the value in this entry by swapping in a free entry
         let prev_value = mem::replace(entry, Entry {
             free: FreeEntry {next: self.free_list_head},
         });
+
+        //TODO: If removing from the end of the slab, we may be able to call `set_len` instead of
+        //      using the free list
         self.free_list_head = Ptr::new_unchecked(index);
         self.free_len += 1;
+
         ManuallyDrop::into_inner(prev_value.value)
     }
 
