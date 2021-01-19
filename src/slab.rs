@@ -448,6 +448,18 @@ mod tests {
             assert_eq!(unsafe { *slab.get_unchecked(index) }, i as i32);
         }
 
+        // change the capacity again
+        assert!(slab.len() < slab.capacity());
+        slab.shrink_to_fit();
+        assert_eq!(slab.len(), slab.capacity());
+
+        // check that the values are still the same
+        assert_eq!(unsafe { *slab.get_unchecked(index0) }, -12);
+
+        for (i, index) in indexes.iter().copied().enumerate() {
+            assert_eq!(unsafe { *slab.get_unchecked(index) }, i as i32);
+        }
+
         // change the values
         unsafe { *slab.get_unchecked_mut(index0) *= -1; }
 
