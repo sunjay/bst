@@ -13,6 +13,9 @@ use std::cmp::Ordering;
 use std::borrow::Borrow;
 use std::iter::FromIterator;
 
+#[cfg(test)]
+use static_assertions::const_assert_eq;
+
 use crate::slab::{UnsafeSlab, Ptr};
 
 struct InnerNode<K, V> {
@@ -21,6 +24,10 @@ struct InnerNode<K, V> {
     left: Ptr,
     right: Ptr,
 }
+
+// We've designed `InnerNode` to use as little space as possible to help with cache
+#[cfg(test)]
+const_assert_eq!(std::mem::size_of::<InnerNode<(), ()>>(), 16);
 
 impl<K, V> InnerNode<K, V> {
     fn new(key: K, value: V) -> Self {

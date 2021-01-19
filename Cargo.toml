@@ -20,6 +20,7 @@ rayon = "1.5"
 criterion = "0.3"
 cfg-if = "1.0"
 simple_bst = {path = "simple_bst", version = "0.1"}
+static_assertions = "1.1"
 
 [[bench]]
 name = "map_comparison"

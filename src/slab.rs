@@ -1,21 +1,8 @@
 use std::mem::{self, ManuallyDrop};
 use std::marker::PhantomData;
 
-// Source: https://docs.rs/static_assertions/1.1.0/src/static_assertions/const_assert.rs.html#52-57
-#[macro_export]
-macro_rules! const_assert {
-    ($x:expr $(,)?) => {
-        #[allow(unknown_lints, eq_op)]
-        const _: [(); 0 - !{ const ASSERT: bool = $x; ASSERT } as usize] = [];
-    };
-}
-
-#[macro_export]
-macro_rules! const_assert_eq {
-    ($x:expr, $y:expr $(,)?) => {
-        const_assert!($x == $y);
-    };
-}
+#[cfg(test)]
+use static_assertions::{const_assert, const_assert_eq};
 
 /// An index into a slab, or "null"
 ///
@@ -26,8 +13,10 @@ macro_rules! const_assert_eq {
 pub struct Ptr(usize);
 
 // We've designed `Ptr` to use as little space as possible to help with cache
+#[cfg(test)]
 const_assert_eq!(mem::size_of::<Ptr>(), 8);
 // Using `Option<usize>` directly would use more space.
+#[cfg(test)]
 const_assert_eq!(mem::size_of::<Option<usize>>(), 16);
 
 impl Default for Ptr {
@@ -88,9 +77,11 @@ union Entry<T> {
 // entry and we do not want the entry to be dropped twice. Having this also enables some important
 // performance improvements since `Vec` may do less work when the inner type does not need to be
 // dropped.
+#[cfg(test)]
 const_assert!(!mem::needs_drop::<Entry<Vec<i32>>>());
 // Explicitly tracking the size of entry because we want to limit the overhead added to each entry
 // because of the free list implementation.
+#[cfg(test)]
 const_assert_eq!(mem::size_of::<Entry<()>>(), 8); // max of 8 bytes overhead per entry
 
 /// An item in the free list
