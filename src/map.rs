@@ -64,7 +64,7 @@ pub struct BSTMap<K, V> {
 impl<K, V> Default for BSTMap<K, V> {
     fn default() -> Self {
         Self {
-            nodes: Default::default(),
+            nodes: UnsafeSlab::new(),
             root: Default::default(),
         }
     }

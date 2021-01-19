@@ -37,6 +37,7 @@ impl Ptr {
     }
 
     #[inline(always)]
+    #[allow(dead_code)] // May be useful later
     pub unsafe fn new_unchecked(index: usize) -> Self {
         Ptr(index)
     }
