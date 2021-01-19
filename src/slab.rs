@@ -620,8 +620,56 @@ mod tests {
 
     #[test]
     fn slab_capacity() {
-        //TODO: test `with_capacity`, `capacity`, `reserve` and `shrink_to_fit`
-        //TODO: test that all methods that say they don't modify capacity actually don't
-        unimplemented!()
+        // Capacity must start at zero (do not allocate until needed)
+        let slab: UnsafeSlab<i32> = UnsafeSlab::new();
+        assert_eq!(slab.capacity(), 0);
+
+        let mut slab: UnsafeSlab<String> = UnsafeSlab::with_capacity(10);
+        assert!(slab.capacity() >= 10);
+        let capacity = slab.capacity();
+
+        // reserve zero slots
+        slab.reserve(0);
+        // capacity should not change
+        assert_eq!(slab.capacity(), capacity);
+
+        // reserve space for at least 10 slots
+        slab.reserve(10);
+        assert!(slab.capacity() >= slab.len() + 10);
+        let capacity = slab.capacity();
+
+        // push should not change capacity if capacity is greater than length
+        assert!(slab.capacity() > slab.len());
+
+        let mut indexes = Vec::new();
+        for i in 0.. {
+            indexes.push(slab.push(i.to_string()));
+
+            if slab.capacity() <= slab.len() {
+                break;
+            }
+        }
+
+        // capacity should still be the same
+        assert_eq!(slab.capacity(), capacity);
+
+        // shrink to fit should not affect items
+        slab.shrink_to_fit();
+        let capacity = slab.capacity();
+        for (i, index) in indexes.iter().copied().enumerate() {
+            assert_eq!(unsafe { slab.get_unchecked(index) }, &i.to_string());
+            assert_eq!(slab.capacity(), capacity);
+        }
+
+        // remove should not change capacity
+        for index in indexes {
+            unsafe { slab.remove(index); }
+            assert_eq!(slab.capacity(), capacity);
+        }
+
+        // shrink_to_fit should bring capacity back down as close to zero as possible
+        assert!(slab.is_empty());
+        slab.shrink_to_fit();
+        assert!(slab.capacity() >= slab.len());
     }
 }
