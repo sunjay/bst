@@ -18,6 +18,7 @@ use static_assertions::const_assert_eq;
 
 use crate::slab::{UnsafeSlab, Ptr};
 
+#[derive(Clone)]
 struct InnerNode<K, V> {
     key: K,
     value: V,
@@ -81,10 +82,37 @@ impl<K, V> fmt::Debug for BSTMap<K, V>
     }
 }
 
+//TODO: This can be specialized to a single memcpy if K: Copy and V: Copy
 impl<K: Clone, V: Clone> Clone for BSTMap<K, V> {
     fn clone(&self) -> Self {
-        //TODO: Implement `Clone` by walking the tree
-        todo!()
+        use std::mem::{self, MaybeUninit};
+
+        let mut nodes = self.nodes.clone_uninit();
+
+        // For a balanced tree, this will use O(log n) space.
+        let mut stack = Vec::new();
+        stack.extend(self.root.into_index());
+
+        // Walk tree and initialize nodes
+        while let Some(index) = stack.pop() {
+            // Safety: any indexes added to the stack are valid in `self.nodes`
+            let node = unsafe { self.nodes.get_unchecked(index) };
+            stack.extend(node.right.into_index());
+            stack.extend(node.left.into_index());
+
+            let new_entry = MaybeUninit::new(node.clone());
+            // Safety: initializing the same index in the new set of nodes as was used in the old
+            // set of nodes, so it should be valid. Furthermore, `MaybeUninit` does not need to be
+            // initialized, so `&mut MaybeUninit` does not cause UB, even though the memory has not
+            // been initialized yet.
+            unsafe { *nodes.get_unchecked_mut(index) = new_entry; }
+        }
+
+        Self {
+            // Safety: All entries that previously contained a value have now been initialized
+            nodes: unsafe { mem::transmute(nodes) },
+            root: self.root,
+        }
     }
 }
 
@@ -907,5 +935,21 @@ mod tests {
         // Empty maps should be equal
         assert!(map5.is_empty());
         assert_eq!(map5, BSTMap::default());
+    }
+
+    #[test]
+    fn test_clone_eq() {
+        let mut map = BSTMap::new();
+
+        for i in 0..10 {
+            map.insert(i, -i * 25);
+        }
+
+        //TODO: Uncomment when remove has been implemented
+        //map.remove(&0);
+        //map.remove(&1);
+        //map.remove(&5);
+
+        assert_eq!(map, map.clone());
     }
 }

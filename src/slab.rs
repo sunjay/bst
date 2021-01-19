@@ -1,4 +1,4 @@
-use std::mem::{self, ManuallyDrop};
+use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::marker::PhantomData;
 
 #[cfg(test)]
@@ -172,6 +172,45 @@ impl<T> UnsafeSlab<T> {
     /// able to hold at least this many.
     pub fn capacity(&self) -> usize {
         self.items.capacity()
+    }
+
+    /// Returns a clone of the slab, without initializing the entries that currently have a value
+    ///
+    /// This is a building block for implementing `Clone` for a type that uses a slab. The idea is
+    /// that you take the return value of this function and initialize each entry that previously
+    /// had a value using `get_unchecked_mut`. Once that is complete, you can transmute back to
+    /// `UnsafeSlab<T>`.
+    ///
+    /// Note that this method is not suitable for anything other than directly cloning the entire
+    /// slab. The transmute is only considered safe if the current structure of the slab is
+    /// maintained. Modifying any other entries that currently aren't occupied will result in UB.
+    pub fn clone_uninit(&self) -> UnsafeSlab<MaybeUninit<T>> {
+        let mut items: Vec<Entry<MaybeUninit<T>>> = Vec::with_capacity(self.items.capacity());
+        // Safety: since `self.items.len() <= self.items.capacity()`, it will be here too.
+        //         This is assuming that unions like `Entry<T>` do not need to be initialized
+        //         until used.
+        unsafe { items.set_len(self.items.len()); }
+
+        // Traverse the free list and initialize each entry
+        let mut current = self.free_list_head;
+        while let Some(index) = current.into_index() {
+            // Safety: Items on the free list are guaranteed to be valid indexes
+            let entry = unsafe { self.items.get_unchecked(index) };
+            // Safety: All items on the free list are guaranteed to be FreeEntry structs
+            let free_entry = unsafe { entry.free };
+            // Safety: The length of `items` is the same as `self.items`, so if something was a
+            // valid index into `self.items`, it should be a valid index into `items`.
+            unsafe { *items.get_unchecked_mut(index) = Entry {free: free_entry}; }
+
+            current = free_entry.next;
+        }
+
+        UnsafeSlab {
+            items,
+            free_list_head: self.free_list_head,
+            free_len: self.free_len,
+            _marker: PhantomData,
+        }
     }
 
     /// Returns a reference to a value in the slab
