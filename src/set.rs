@@ -23,7 +23,7 @@ use std::iter::FromIterator;
 ///
 /// The tree is not guaranteed to be structured or balanced in any particular way. The
 /// implementation may structure the tree however is needed to fulfill the BST properties.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct BSTSet<T> {
     items: crate::map::BSTMap<T, ()>,
 }
@@ -45,6 +45,14 @@ impl<T> fmt::Debug for BSTSet<T>
             .finish()
     }
 }
+
+impl<T: Ord + PartialEq> PartialEq for BSTSet<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.items.eq(&other.items)
+    }
+}
+
+impl<T: Ord + Eq> Eq for BSTSet<T> {}
 
 impl<T: Ord> BSTSet<T> {
     /// Creates an empty `BSTSet`

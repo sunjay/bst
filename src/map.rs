@@ -88,14 +88,25 @@ impl<K: Clone, V: Clone> Clone for BSTMap<K, V> {
     }
 }
 
-impl<K: PartialEq, V: PartialEq> PartialEq for BSTMap<K, V> {
+impl<K: Ord + PartialEq, V: PartialEq> PartialEq for BSTMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        //TODO: Compare the two trees
-        todo!()
+        // We can't just compare the binary trees structurally, since they may be structured
+        // differently while still having all the same elements (e.g. if insertion order is
+        // different). Instead, we use in-order traversal since we know that that is guaranteed to
+        // produce the elements in sorted order. If their sorted orders are equal, the maps are
+        // equal.
+
+        if self.len() != other.len() {
+            return false;
+        }
+
+        self.iter_inorder().zip(other.iter_inorder()).all(|((k1, v1), (k2, v2))| {
+            k1.eq(k2) && v1.eq(v2)
+        })
     }
 }
 
-impl<K: Eq, V: Eq> Eq for BSTMap<K, V> {}
+impl<K: Ord + Eq, V: Eq> Eq for BSTMap<K, V> {}
 
 impl<K: Ord, V> BSTMap<K, V> {
     /// Creates an empty `BSTMap`
