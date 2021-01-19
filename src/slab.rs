@@ -365,25 +365,54 @@ mod tests {
         assert_eq!(slab.capacity(), 0);
 
         // Push a single value
-        let index = slab.push(19384);
-        assert_eq!(unsafe { *slab.get_unchecked(index) }, 19384);
-        assert_eq!(unsafe { *slab.get_unchecked(0) }, 19384);
+        let index0 = slab.push(19384);
+        assert_eq!(unsafe { *slab.get_unchecked(index0) }, 19384);
 
         assert_eq!(slab.len(), 1);
         assert!(!slab.is_empty());
         assert!(slab.capacity() > 0);
 
         // Remove the only value in the slab
-        assert_eq!(unsafe { slab.remove(0) }, 19384);
+        assert_eq!(unsafe { slab.remove(index0) }, 19384);
 
         assert_eq!(slab.len(), 0);
         assert!(slab.is_empty());
         assert!(slab.capacity() > 0);
 
-        //TODO: Push another value
-        //TODO: Push another second value
-        //TODO: Remove the first value (second should still be available)
-        //TODO: Push another value (should end up where the first value was)
+        // Push another value
+        let index0 = slab.push(831783);
+        assert_eq!(unsafe { *slab.get_unchecked(index0) }, 831783);
+
+        assert_eq!(slab.len(), 1);
+        assert!(!slab.is_empty());
+        assert!(slab.capacity() > 0);
+
+        // Push a second value
+        let index1 = slab.push(57);
+        assert_eq!(unsafe { *slab.get_unchecked(index0) }, 831783);
+        assert_eq!(unsafe { *slab.get_unchecked(index1) }, 57);
+
+        assert_eq!(slab.len(), 2);
+        assert!(!slab.is_empty());
+        assert!(slab.capacity() > 0);
+
+        // Remove the first value (second should still be available)
+        assert_eq!(unsafe { slab.remove(index0) }, 831783);
+        assert_eq!(unsafe { *slab.get_unchecked(index1) }, 57);
+
+        assert_eq!(slab.len(), 1);
+        assert!(!slab.is_empty());
+        assert!(slab.capacity() > 0);
+
+        // Push another value (may end up where the first value was)
+        let index2 = slab.push(999);
+        assert_eq!(unsafe { *slab.get_unchecked(index1) }, 57);
+        assert_eq!(unsafe { *slab.get_unchecked(index2) }, 999);
+
+        assert_eq!(slab.len(), 2);
+        assert!(!slab.is_empty());
+        assert!(slab.capacity() > 0);
+
         //TODO: Remove the second value (first value should remain)
         //TODO: Remove the first value
         unimplemented!();
@@ -403,6 +432,23 @@ mod tests {
         assert!(!slab.is_empty());
         let capacity = slab.capacity();
 
+        slab.clear();
+        assert!(slab.is_empty());
+        assert_eq!(slab.capacity(), capacity);
+
+        // clear an empty slab (insertions and removals after this should still work)
+        slab.clear();
+        assert!(slab.is_empty());
+        assert_eq!(slab.capacity(), capacity);
+
+        // push 2 values and remove one, so that clear has to account for the free space
+        let index = slab.push("ddd");
+        slab.push("fff");
+        let capacity = slab.capacity();
+
+        unsafe { slab.remove(index); }
+
+        assert!(!slab.is_empty());
         slab.clear();
         assert!(slab.is_empty());
         assert_eq!(slab.capacity(), capacity);
@@ -441,6 +487,7 @@ mod tests {
 
         let mut slab = UnsafeSlab::new();
 
+        let index0;
         let weak_ref1;
         let weak_ref2;
         {
@@ -449,7 +496,7 @@ mod tests {
             weak_ref1 = Arc::downgrade(&value1);
             weak_ref2 = Arc::downgrade(&value2);
 
-            slab.push(value1);
+            index0 = slab.push(value1);
             slab.push(value2);
         }
 
@@ -459,7 +506,7 @@ mod tests {
         let weak_ref3;
         {
             // Drop one of the values via remove, but then reuse the space
-            unsafe { slab.remove(0); }
+            unsafe { slab.remove(index0); }
 
             let value3 = Arc::new(3);
             weak_ref3 = Arc::downgrade(&value3);
