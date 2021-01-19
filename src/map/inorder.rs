@@ -1,8 +1,8 @@
 use std::iter::FusedIterator;
 
-use crate::slab::UnsafeSlab;
+use crate::slab::{Ptr, UnsafeSlab};
 
-use super::{InnerNode, index::NodeIndex};
+use super::InnerNode;
 
 pub struct IterInorder<'a, K, V> {
     nodes: &'a UnsafeSlab<InnerNode<K, V>>,
@@ -11,7 +11,7 @@ pub struct IterInorder<'a, K, V> {
 
 // See: https://www.geeksforgeeks.org/inorder-tree-traversal-without-recursion/
 impl<'a, K, V> IterInorder<'a, K, V> {
-    pub(super) fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, root: NodeIndex) -> Self {
+    pub(super) fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, root: Ptr) -> Self {
         let mut stack = Vec::new();
         let mut current = root.into_index();
         while let Some(index) = current {

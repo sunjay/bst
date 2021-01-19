@@ -39,7 +39,7 @@ impl Default for Ptr {
 
 impl Ptr {
     #[inline(always)]
-    fn new(index: usize) -> Option<Self> {
+    pub fn new(index: usize) -> Option<Self> {
         if index == usize::MAX {
             None
         } else {

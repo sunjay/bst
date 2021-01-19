@@ -2,9 +2,9 @@ use std::ptr;
 use std::mem;
 use std::fmt;
 
-use crate::slab::UnsafeSlab;
+use crate::slab::{Ptr, UnsafeSlab};
 
-use super::{InnerNode, index::NodeIndex, push_node};
+use super::{InnerNode, push_node};
 
 /// A single node of the binary search tree
 #[derive(Clone)]
@@ -52,7 +52,7 @@ impl<'a, K, V> Node<'a, K, V> {
     /// # Safety
     ///
     /// Must guarantee that `index` represents a valid index into `nodes`.
-    pub(super) unsafe fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, index: NodeIndex) -> Option<Self> {
+    pub(super) unsafe fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, index: Ptr) -> Option<Self> {
         index.into_index().map(|index| Self {nodes, index})
     }
 
@@ -68,12 +68,12 @@ impl<'a, K, V> Node<'a, K, V> {
 
     /// Returns true if this node has a left subtree
     pub fn has_left(&self) -> bool {
-        !self.node().left.is_none()
+        !self.node().left.is_null()
     }
 
     /// Returns true if this node has a right subtree
     pub fn has_right(&self) -> bool {
-        !self.node().right.is_none()
+        !self.node().right.is_null()
     }
 
     /// Returns the left child node (subtree) of this node, if any
@@ -142,7 +142,7 @@ impl<'a, K, V> NodeMut<'a, K, V> {
     /// # Safety
     ///
     /// Must guarantee that `index` represents a valid index into `nodes`.
-    pub(super) unsafe fn new(nodes: &'a mut UnsafeSlab<InnerNode<K, V>>, index: NodeIndex) -> Option<Self> {
+    pub(super) unsafe fn new(nodes: &'a mut UnsafeSlab<InnerNode<K, V>>, index: Ptr) -> Option<Self> {
         index.into_index().map(move |index| Self {nodes, index})
     }
 
@@ -169,12 +169,12 @@ impl<'a, K, V> NodeMut<'a, K, V> {
 
     /// Returns true if this node has a left subtree
     pub fn has_left(&self) -> bool {
-        !self.node().left.is_none()
+        !self.node().left.is_null()
     }
 
     /// Returns true if this node has a right subtree
     pub fn has_right(&self) -> bool {
-        !self.node().right.is_none()
+        !self.node().right.is_null()
     }
 
     /// Returns the left child node (subtree) of this node, if any
@@ -190,18 +190,18 @@ impl<'a, K, V> NodeMut<'a, K, V> {
     }
 
     /// Private API for updating the left subtree of this node
-    pub(crate) fn set_left(&'a mut self, index: NodeIndex) {
+    pub(crate) fn set_left(&'a mut self, index: Ptr) {
         self.node_mut().left = index;
     }
 
     /// Private API for updating the right subtree of this node
-    pub(crate) fn set_right(&'a mut self, index: NodeIndex) {
+    pub(crate) fn set_right(&'a mut self, index: Ptr) {
         self.node_mut().right = index;
     }
 
     /// Private API for pushing a new node and assigning the left subtree
     /// of this node
-    pub(crate) fn push_left(&'a mut self, key: K, value: V) -> NodeIndex {
+    pub(crate) fn push_left(&'a mut self, key: K, value: V) -> Ptr {
         let index = push_node(self.nodes, key, value);
         self.set_left(index);
         index
@@ -209,7 +209,7 @@ impl<'a, K, V> NodeMut<'a, K, V> {
 
     /// Private API for pushing a new node and assigning the right subtree
     /// of this node
-    pub(crate) fn push_right(&'a mut self, key: K, value: V) -> NodeIndex {
+    pub(crate) fn push_right(&'a mut self, key: K, value: V) -> Ptr {
         let index = push_node(self.nodes, key, value);
         self.set_right(index);
         index

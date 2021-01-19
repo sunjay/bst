@@ -1,4 +1,3 @@
-mod index;
 mod node;
 mod preorder;
 mod inorder;
@@ -14,15 +13,13 @@ use std::cmp::Ordering;
 use std::borrow::Borrow;
 use std::iter::FromIterator;
 
-use crate::slab::UnsafeSlab;
-
-use index::NodeIndex;
+use crate::slab::{UnsafeSlab, Ptr};
 
 struct InnerNode<K, V> {
     key: K,
     value: V,
-    left: NodeIndex,
-    right: NodeIndex,
+    left: Ptr,
+    right: Ptr,
 }
 
 impl<K, V> InnerNode<K, V> {
@@ -30,15 +27,15 @@ impl<K, V> InnerNode<K, V> {
         Self {
             key,
             value,
-            left: NodeIndex::default(),
-            right: NodeIndex::default(),
+            left: Ptr::default(),
+            right: Ptr::default(),
         }
     }
 }
 
-fn push_node<K, V>(nodes: &mut UnsafeSlab<InnerNode<K, V>>, key: K, value: V) -> NodeIndex {
+fn push_node<K, V>(nodes: &mut UnsafeSlab<InnerNode<K, V>>, key: K, value: V) -> Ptr {
     let index = nodes.push(InnerNode::new(key, value));
-    NodeIndex::new(index).expect("cannot have more than usize::MAX - 1 nodes")
+    Ptr::new(index).expect("cannot have more than usize::MAX - 1 nodes")
 }
 
 /// A binary search tree (BST)
@@ -54,7 +51,7 @@ fn push_node<K, V>(nodes: &mut UnsafeSlab<InnerNode<K, V>>, key: K, value: V) ->
 /// implementation may structure the tree however is needed to fulfill the BST properties.
 pub struct BSTMap<K, V> {
     nodes: UnsafeSlab<InnerNode<K, V>>,
-    root: NodeIndex,
+    root: Ptr,
 }
 
 impl<K, V> Default for BSTMap<K, V> {
@@ -179,7 +176,7 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// assert!(!map.is_empty());
     /// ```
     pub fn is_empty(&self) -> bool {
-        debug_assert!(self.nodes.is_empty() == self.root.is_none());
+        debug_assert!(self.nodes.is_empty() == self.root.is_null());
         self.nodes.is_empty()
     }
 
@@ -428,7 +425,7 @@ impl<K: Ord, V> BSTMap<K, V> {
         let Self {nodes, root} = self;
 
         nodes.clear();
-        *root = NodeIndex::default();
+        *root = Ptr::default();
     }
 
     /// Performs a pre-order traversal of the tree
