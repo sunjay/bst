@@ -7,7 +7,6 @@ use crate::slab::{Ptr, UnsafeSlab};
 use super::{InnerNode, push_node};
 
 /// A single node of the binary search tree
-#[derive(Clone)]
 pub struct Node<'a, K, V> {
     nodes: &'a UnsafeSlab<InnerNode<K, V>>,
     /// An index into `nodes` for the node represented by this struct
@@ -27,6 +26,12 @@ impl<'a, K, V> fmt::Debug for Node<'a, K, V>
             .field("left", &self.left())
             .field("right", &self.right())
             .finish()
+    }
+}
+
+impl<'a, K, V> Clone for Node<'a, K, V> {
+    fn clone(&self) -> Self {
+        Self {..*self}
     }
 }
 
