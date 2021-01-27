@@ -37,7 +37,6 @@ impl Ptr {
     }
 
     #[inline(always)]
-    #[allow(dead_code)] // May be useful later
     pub unsafe fn new_unchecked(index: usize) -> Self {
         Ptr(index)
     }
@@ -275,7 +274,11 @@ impl<T> UnsafeSlab<T> {
     /// modify any other entries in the slab. Their indexes remain the same and can still be used.
     ///
     /// Use `clear` (and possibly `shrink_to_fit`) to reclaim the space used by removed entries.
-    #[allow(dead_code)] //TODO
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index or an index that was previously removed is
+    /// undefined behavior even if the resulting reference is not used.
     pub unsafe fn remove(&mut self, index: usize) -> T {
         //TODO: If removing this makes len() == 0, we can call `reset_internal_state` and clear the
         //      free list

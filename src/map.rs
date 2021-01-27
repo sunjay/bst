@@ -434,7 +434,7 @@ impl<K: Ord, V> BSTMap<K, V> {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// use bst::BSTMap;
     ///
     /// let mut map = BSTMap::new();
@@ -442,12 +442,115 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// assert_eq!(map.remove(&1), Some("a"));
     /// assert_eq!(map.remove(&1), None);
     /// ```
-    pub fn remove<Q>(&mut self, _key: &Q) -> Option<V>
+    pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
         where K: Borrow<Q>,
               Q: Ord + ?Sized,
     {
-        //TODO: Re-enable doctest for this method
-        todo!()
+        self.remove_entry(key).map(|(_, value)| value)
+    }
+
+    /// Removes a key from the map, returning the (key, value) pair for that key if it was
+    /// previously in the map.
+    ///
+    /// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
+    /// form must match the ordering on the key type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use simple_bst::SimpleBSTMap;
+    ///
+    /// let mut map = SimpleBSTMap::new();
+    /// map.insert(1, "a");
+    /// assert_eq!(map.remove_entry(&1), Some((1, "a")));
+    /// assert_eq!(map.remove_entry(&1), None);
+    /// ```
+    pub fn remove_entry<Q>(&mut self, key: &Q) -> Option<(K, V)>
+        where K: Borrow<Q>,
+              Q: Ord + ?Sized,
+    {
+        let mut parent = Ptr::null();
+        let mut current = self.root;
+
+        while let Some(index) = current.into_index() {
+            // Safety: any indexes in the tree are valid in `self.nodes`
+            let node = unsafe { self.nodes.get_unchecked(index) };
+
+            match key.cmp(node.key.borrow()) {
+                Ordering::Less => current = node.left,
+                Ordering::Greater => current = node.right,
+                Ordering::Equal => break,
+            }
+
+            parent = current;
+        }
+
+        // If a node was found, remove it, otherwise return None
+        let index = current.into_index()?;
+        // Safety: any indexes in the tree are valid in `self.nodes`
+        let node = unsafe { self.nodes.get_unchecked(index) };
+
+        match (node.left.into_index(), node.right.into_index()) {
+            // No child nodes, just delete the node
+            (None, None) => {
+                // Safety: any indexes in the tree are valid in `self.nodes`
+                // The previous `node` variable which was referencing this memory will end here so
+                // there is no overlap in lifetimes. We also shadow the name to extra make sure that
+                // there can be no UB.
+                let node = unsafe { self.nodes.remove(index) };
+
+                if let Some(parent_index) = parent.into_index() {
+                    let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
+
+                    if parent_node.left == current {
+                        parent_node.left = Ptr::null();
+
+                    } else if parent_node.right == current {
+                        parent_node.right = Ptr::null();
+                    }
+                }
+
+                if self.root == current {
+                    self.root = Ptr::null();
+                }
+
+                Some((node.key, node.value))
+            },
+
+            // Only one child node, so we can just replace the node with its child
+            (None, Some(child_index)) |
+            (Some(child_index), None) => {
+                // Safety: if this was a valid pointer before, it is still valid now
+                let child_ptr = unsafe { Ptr::new_unchecked(child_index) };
+
+                // Safety: any indexes in the tree are valid in `self.nodes`
+                // The previous `node` variable which was referencing this memory will end here so
+                // there is no overlap in lifetimes. We also shadow the name to extra make sure that
+                // there can be no UB.
+                let node = unsafe { self.nodes.remove(index) };
+
+                if let Some(parent_index) = parent.into_index() {
+                    let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
+
+                    if parent_node.left == current {
+                        parent_node.left = child_ptr;
+
+                    } else if parent_node.right == current {
+                        parent_node.right = child_ptr;
+                    }
+                }
+
+                if self.root == current {
+                    self.root = child_ptr;
+                }
+
+                Some((node.key, node.value))
+            },
+
+            (Some(left_index), Some(right_index)) => {
+                todo!()
+            },
+        }
     }
 
     /// Clears the map, removing all elements
@@ -645,6 +748,37 @@ mod tests {
         assert_eq!(map.get(&3), Some(&1));
         assert_eq!(map.get(&4), Some(&-2));
         assert_eq!(map.get(&0), Some(&44));
+    }
+
+    #[test]
+    fn test_map_insert_get_remove() {
+        let mut map = BSTMap::new();
+
+        // Remove on an empty map
+        assert_eq!(map.remove(&0), None);
+
+        // Remove from a map with one entry
+        assert_eq!(map.insert(99, -3), None);
+        assert_eq!(map.remove(&99), Some(-3));
+
+        assert_eq!(map.get(&3), None);
+        assert_eq!(map.insert(3, 1), None);
+        assert_eq!(map.get(&3), Some(&1));
+
+        assert_eq!(map.get(&4), None);
+        assert_eq!(map.insert(4, -2), None);
+        assert_eq!(map.get(&3), Some(&1));
+        assert_eq!(map.remove_entry(&4), Some((4, -2)));
+        assert_eq!(map.remove_entry(&4), None);
+
+        assert_eq!(map.get(&0), None);
+        assert_eq!(map.insert(0, 44), None);
+        assert_eq!(map.get(&3), Some(&1));
+        assert_eq!(map.get(&4), None);
+        assert_eq!(map.get(&0), Some(&44));
+
+        assert_eq!(map.remove(&0), Some(44));
+        assert_eq!(map.remove(&0), None);
     }
 
     #[test]
