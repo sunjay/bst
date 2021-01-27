@@ -258,7 +258,7 @@ impl<T> UnsafeSlab<T> {
 
         let index = self.items.len();
         // Since we store `Ptr` internally, we can't have usize::MAX as a valid index into the slab
-        if index >= usize::MAX {
+        if index == usize::MAX {
             panic!("cannot have more than usize::MAX - 1 entries in slab");
         }
 
