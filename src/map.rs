@@ -477,12 +477,18 @@ impl<K: Ord, V> BSTMap<K, V> {
             let node = unsafe { self.nodes.get_unchecked(index) };
 
             match key.cmp(node.key.borrow()) {
-                Ordering::Less => current = node.left,
-                Ordering::Greater => current = node.right,
+                Ordering::Less => {
+                    parent = current;
+                    current = node.left
+                },
+
+                Ordering::Greater => {
+                    parent = current;
+                    current = node.right
+                },
+
                 Ordering::Equal => break,
             }
-
-            parent = current;
         }
 
         // If a node was found, remove it, otherwise return None
