@@ -458,9 +458,9 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// # Examples
     ///
     /// ```
-    /// use simple_bst::SimpleBSTMap;
+    /// use bst::BSTMap;
     ///
-    /// let mut map = SimpleBSTMap::new();
+    /// let mut map = BSTMap::new();
     /// map.insert(1, "a");
     /// assert_eq!(map.remove_entry(&1), Some((1, "a")));
     /// assert_eq!(map.remove_entry(&1), None);
