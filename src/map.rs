@@ -536,6 +536,7 @@ impl<K: Ord, V> BSTMap<K, V> {
                 let node = unsafe { self.nodes.remove(index) };
 
                 if let Some(parent_index) = parent.into_index() {
+                    // Safety: any indexes from the tree are valid in `self.nodes`
                     let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
 
                     if parent_node.left == current {
@@ -546,6 +547,7 @@ impl<K: Ord, V> BSTMap<K, V> {
                     }
                 }
 
+                // Update the root node if that is what we're removing
                 if self.root == current {
                     self.root = child_ptr;
                 }
@@ -553,8 +555,80 @@ impl<K: Ord, V> BSTMap<K, V> {
                 Some((node.key, node.value))
             },
 
+            // Two child nodes, swap the current node for its in-order successor
             (Some(left_index), Some(right_index)) => {
-                todo!()
+                // the parent of `right_index` is the index from `current`
+                let mut inorder_succ_parent = index;
+                let mut inorder_succ = right_index;
+
+                loop {
+                    // Safety: any indexes from the tree are valid in `self.nodes`
+                    let node = unsafe { self.nodes.get_unchecked(inorder_succ) };
+
+                    match node.left.into_index() {
+                        Some(node_left_index) => {
+                            inorder_succ_parent = inorder_succ;
+                            inorder_succ = node_left_index;
+                        },
+
+                        None => break,
+                    }
+                }
+
+                // Safety: any indexes from the tree are valid in `self.nodes`
+                //   Furthermore, the only other reference in scope is `node`. Since we started
+                //   finding `inorder_succ` at `right_index`, and `right_index` is not the same
+                //   as `index` (from `current`), we know that `inorder_succ_parent_index`
+                //   cannot be the same as `index`. Thus, this mutable reference is unique.
+                let inorder_succ_parent_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ_parent) };
+                // Remove the in-order successor from its parent (the parent might be the current node)
+                if inorder_succ_parent == index {
+                    // Remove the right child from the current node
+                    inorder_succ_parent_node.right = Ptr::null();
+                } else {
+                    // Remove the left child from the in-order successor
+                    inorder_succ_parent_node.left = Ptr::null();
+                }
+
+                // Safety: any indexes from the tree are valid in `self.nodes`
+                //   This index may not be unique from `index`, so `node` may not be used again
+                //   after this line. If it is, the lifetime of `node` and this variable will
+                //   overlap and we'll have both a mutable ref and immutable ref to the same data.
+                let inorder_succ_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ) };
+                // Update the left child of the in-order successor
+                // Safety: if this was a valid pointer before, it is still valid now
+                inorder_succ_node.left = unsafe { Ptr::new_unchecked(left_index) };
+
+                // Safety: the code above guarantees that in-order successor is a valid pointer and
+                //   will not be `usize::MAX` (since all indexes in the tree are valid)
+                let inorder_succ_ptr = unsafe { Ptr::new_unchecked(inorder_succ) };
+                // Assign the in-order successor as the new child of the parent of `current`
+                if let Some(parent_index) = parent.into_index() {
+                    // Safety: any indexes from the tree are valid in `self.nodes`
+                    let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
+
+                    if parent_node.left == current {
+                        parent_node.left = inorder_succ_ptr;
+
+                    } else if parent_node.right == current {
+                        parent_node.right = inorder_succ_ptr;
+                    }
+                }
+
+                // Update the root node if that is what we're removing
+                if self.root == current {
+                    self.root = inorder_succ_ptr;
+                }
+
+                // Safety: any indexes in the tree are valid in `self.nodes`
+                //   The previous `node` variable which was referencing this memory will end here so
+                //   there is no overlap in lifetimes. The `inorder_succ_node` which may also
+                //   overlap is also not used after this point, so there will be no overlap in
+                //   lifetime there either. We also shadow the name to extra make sure that there
+                //   can be no UB.
+                let node = unsafe { self.nodes.remove(index) };
+
+                Some((node.key, node.value))
             },
         }
     }
@@ -774,8 +848,10 @@ mod tests {
         assert_eq!(map.get(&4), None);
         assert_eq!(map.insert(4, -2), None);
         assert_eq!(map.get(&3), Some(&1));
+
         assert_eq!(map.remove_entry(&4), Some((4, -2)));
         assert_eq!(map.remove_entry(&4), None);
+        assert_eq!(map.get(&3), Some(&1));
 
         assert_eq!(map.get(&0), None);
         assert_eq!(map.insert(0, 44), None);
@@ -785,6 +861,29 @@ mod tests {
 
         assert_eq!(map.remove(&0), Some(44));
         assert_eq!(map.remove(&0), None);
+        assert_eq!(map.get(&3), Some(&1));
+        assert_eq!(map.get(&4), None);
+    }
+
+    #[test]
+    fn test_map_insert_remove_two_children() {
+        // Using a map with a type that implements Drop
+        let mut map: BSTMap<String, _> = BSTMap::new();
+
+        assert_eq!(map.insert("b".to_string(), 0), None);
+        assert_eq!(map.insert("a".to_string(), 89), None);
+        assert_eq!(map.insert("c".to_string(), 391), None);
+
+        // Remove an entry with two children
+        assert_eq!(map.remove("b"), Some(0));
+        assert_eq!(map.remove("b"), None);
+
+        // remove should not impact other items
+        assert_eq!(map.get("a"), Some(&89));
+        assert_eq!(map.get("c"), Some(&391));
+
+        // remove should detect keys that don't exist
+        assert_eq!(map.remove(""), None);
     }
 
     #[test]
