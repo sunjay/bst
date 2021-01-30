@@ -576,21 +576,6 @@ impl<K: Ord, V> BSTMap<K, V> {
                 }
 
                 // Safety: any indexes from the tree are valid in `self.nodes`
-                //   Furthermore, the only other reference in scope is `node`. Since we started
-                //   finding `inorder_succ` at `right_index`, and `right_index` is not the same
-                //   as `index` (from `current`), we know that `inorder_succ_parent_index`
-                //   cannot be the same as `index`. Thus, this mutable reference is unique.
-                let inorder_succ_parent_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ_parent) };
-                // Remove the in-order successor from its parent (the parent might be the current node)
-                if inorder_succ_parent == index {
-                    // Remove the right child from the current node
-                    inorder_succ_parent_node.right = Ptr::null();
-                } else {
-                    // Remove the left child from the in-order successor
-                    inorder_succ_parent_node.left = Ptr::null();
-                }
-
-                // Safety: any indexes from the tree are valid in `self.nodes`
                 //   This index may not be unique from `index`, so `node` may not be used again
                 //   after this line. If it is, the lifetime of `node` and this variable will
                 //   overlap and we'll have both a mutable ref and immutable ref to the same data.
@@ -598,6 +583,33 @@ impl<K: Ord, V> BSTMap<K, V> {
                 // Update the left child of the in-order successor
                 // Safety: if this was a valid pointer before, it is still valid now
                 inorder_succ_node.left = unsafe { Ptr::new_unchecked(left_index) };
+                // Store the right subtree of the in-order successor so we can use it when we remove
+                // the in-order successor from its parent
+                let inorder_succ_right = inorder_succ_node.right;
+                // Update the right child of the in-order successor to be the right child of the
+                // `current` node being removed so we don't lose that subtree
+                // Only need to do this if the in-order successor is not already the right subtree
+                if inorder_succ != right_index {
+                    // Safety: if this was a valid pointer before, it is still valid now
+                    inorder_succ_node.right = unsafe { Ptr::new_unchecked(right_index) };
+                }
+
+                // Safety: any indexes from the tree are valid in `self.nodes`
+                //   Furthermore, the only other reference in scope is `node`. Since we started
+                //   finding `inorder_succ` at `right_index`, and `right_index` is not the same
+                //   as `index` (from `current`), we know that `inorder_succ_parent_index`
+                //   cannot be the same as `index`. Thus, this mutable reference is unique.
+                let inorder_succ_parent_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ_parent) };
+                // Remove the in-order successor from its parent (the parent might be the current node)
+                // Note: in-order successor is always the zero or one child remove case since we
+                // find it by checking if there is a left child
+                if inorder_succ_parent == index {
+                    // Remove the right child from the current node
+                    inorder_succ_parent_node.right = inorder_succ_right;
+                } else {
+                    // Remove the left child from the parent of the in-order successor
+                    inorder_succ_parent_node.left = inorder_succ_right;
+                }
 
                 // Safety: the code above guarantees that in-order successor is a valid pointer and
                 //   will not be `usize::MAX` (since all indexes in the tree are valid)
@@ -958,7 +970,9 @@ mod tests {
             // The list of keys that have been inserted
             let mut keys = Vec::new();
 
-            let mut rng = rand::thread_rng();
+            let seed = thread_rng().gen();
+            println!("Seed: {:?}", seed);
+            let mut rng = StdRng::from_seed(seed);
             for _ in 0..rng.gen_range(OPERATIONS..=OPERATIONS*2) {
                 assert_eq!(map.is_empty(), expected.is_empty());
                 assert_eq!(map.len(), expected.len());
@@ -988,18 +1002,36 @@ mod tests {
                             Some(key) => key,
                             None => continue,
                         };
+
                         let value = rng.gen_range(100..=200);
 
                         assert_eq!(map.get(&key), expected.get(&key));
-                        // Unwrap is safe because we're selected from the list of existing keys
-                        *map.get_mut(&key).unwrap() = value;
-                        *expected.get_mut(&key).unwrap() = value;
+                        match (map.get_mut(&key), expected.get_mut(&key)) {
+                            (Some(entry1), Some(entry2)) => {
+                                *entry1 = value;
+                                *entry2 = value;
+                            },
+
+                            _ => continue,
+                        }
                         assert_eq!(map.get(&key), expected.get(&key));
                         assert_eq!(map.get_mut(&key), expected.get_mut(&key));
                     },
 
+                    // Remove an existing key
+                    51..=70 => {
+                        let key = match keys.choose(&mut rng).copied() {
+                            Some(key) => key,
+                            None => continue,
+                        };
+
+                        assert_eq!(map.remove(&key), expected.remove(&key));
+                        // Second remove should yield `None`
+                        assert_eq!(map.remove(&key), expected.remove(&key));
+                    },
+
                     // Insert a key
-                    51..=100 => {
+                    71..=100 => {
                         // Only inserting positive values
                         let key = rng.gen_range(0..=64);
                         let value = rng.gen_range(100..=200);
@@ -1013,8 +1045,6 @@ mod tests {
                         assert_eq!(map.get(&key), expected.get(&key));
                         assert_eq!(map.get_mut(&key), expected.get_mut(&key));
                     },
-
-                    //TODO: Test `remove()`
 
                     _ => unreachable!(),
                 }
@@ -1184,10 +1214,9 @@ mod tests {
             map.insert(i, -i * 25);
         }
 
-        //TODO: Uncomment when remove has been implemented
-        //map.remove(&0);
-        //map.remove(&1);
-        //map.remove(&5);
+        map.remove(&0);
+        map.remove(&1);
+        map.remove(&5);
 
         assert_eq!(map, map.clone());
     }
