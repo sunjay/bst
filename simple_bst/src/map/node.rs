@@ -1,3 +1,5 @@
+use std::mem;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Node<K, V> {
     key: K,
@@ -14,6 +16,10 @@ impl<K, V> Node<K, V> {
             left: None,
             right: None,
         }
+    }
+
+    pub(crate) fn into_inner(self) -> (K, V) {
+        (self.key, self.value)
     }
 
     pub fn key(&self) -> &K {
@@ -53,14 +59,22 @@ impl<K, V> Node<K, V> {
     }
 
     /// New node MUST maintain BST property
-    pub(crate) fn set_left(&mut self, new_node: Self) {
+    pub(crate) fn set_left(&mut self, new_node: Self) -> Option<Box<Self>> {
         debug_assert!(self.left.is_none());
-        self.left = Some(Box::new(new_node));
+        mem::replace(&mut self.left, Some(Box::new(new_node)))
     }
 
     /// New node MUST maintain BST property
-    pub(crate) fn set_right(&mut self, new_node: Self) {
+    pub(crate) fn set_right(&mut self, new_node: Self) -> Option<Box<Self>> {
         debug_assert!(self.right.is_none());
-        self.right = Some(Box::new(new_node));
+        mem::replace(&mut self.right, Some(Box::new(new_node)))
+    }
+
+    pub(crate) fn remove_left(&mut self) -> Option<Self> {
+        self.left.take().map(|node| *node)
+    }
+
+    pub(crate) fn remove_right(&mut self) -> Option<Self> {
+        self.right.take().map(|node| *node)
     }
 }
