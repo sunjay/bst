@@ -479,12 +479,12 @@ impl<K: Ord, V> BSTMap<K, V> {
             match key.cmp(node.key.borrow()) {
                 Ordering::Less => {
                     parent = current;
-                    current = node.left
+                    current = node.left;
                 },
 
                 Ordering::Greater => {
                     parent = current;
-                    current = node.right
+                    current = node.right;
                 },
 
                 Ordering::Equal => break,
@@ -505,19 +505,24 @@ impl<K: Ord, V> BSTMap<K, V> {
                 // there can be no UB.
                 let node = unsafe { self.nodes.remove(index) };
 
-                if let Some(parent_index) = parent.into_index() {
-                    let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
+                match parent.into_index() {
+                    // Remove the node from its parent
+                    Some(parent_index) => {
+                        // Safety: any indexes from the tree are valid in `self.nodes`
+                        let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
 
-                    if parent_node.left == current {
-                        parent_node.left = Ptr::null();
+                        if parent_node.left == current {
+                            parent_node.left = Ptr::null();
 
-                    } else if parent_node.right == current {
-                        parent_node.right = Ptr::null();
-                    }
-                }
+                        } else if parent_node.right == current {
+                            parent_node.right = Ptr::null();
+                        }
+                    },
 
-                if self.root == current {
-                    self.root = Ptr::null();
+                    // No parent, so must be removing the root node
+                    None => {
+                        self.root = Ptr::null();
+                    },
                 }
 
                 Some((node.key, node.value))
@@ -535,21 +540,24 @@ impl<K: Ord, V> BSTMap<K, V> {
                 // there can be no UB.
                 let node = unsafe { self.nodes.remove(index) };
 
-                if let Some(parent_index) = parent.into_index() {
-                    // Safety: any indexes from the tree are valid in `self.nodes`
-                    let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
+                match parent.into_index() {
+                    // Remove the node from its parent
+                    Some(parent_index) => {
+                        // Safety: any indexes from the tree are valid in `self.nodes`
+                        let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
 
-                    if parent_node.left == current {
-                        parent_node.left = child_ptr;
+                        if parent_node.left == current {
+                            parent_node.left = child_ptr;
 
-                    } else if parent_node.right == current {
-                        parent_node.right = child_ptr;
-                    }
-                }
+                        } else if parent_node.right == current {
+                            parent_node.right = child_ptr;
+                        }
+                    },
 
-                // Update the root node if that is what we're removing
-                if self.root == current {
-                    self.root = child_ptr;
+                    // No parent, so must be removing the root node
+                    None => {
+                        self.root = child_ptr;
+                    },
                 }
 
                 Some((node.key, node.value))
@@ -614,22 +622,24 @@ impl<K: Ord, V> BSTMap<K, V> {
                 // Safety: the code above guarantees that in-order successor is a valid pointer and
                 //   will not be `usize::MAX` (since all indexes in the tree are valid)
                 let inorder_succ_ptr = unsafe { Ptr::new_unchecked(inorder_succ) };
-                // Assign the in-order successor as the new child of the parent of `current`
-                if let Some(parent_index) = parent.into_index() {
-                    // Safety: any indexes from the tree are valid in `self.nodes`
-                    let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
+                match parent.into_index() {
+                    // Assign the in-order successor as the new child of the parent of `current`
+                    Some(parent_index) => {
+                        // Safety: any indexes from the tree are valid in `self.nodes`
+                        let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
 
-                    if parent_node.left == current {
-                        parent_node.left = inorder_succ_ptr;
+                        if parent_node.left == current {
+                            parent_node.left = inorder_succ_ptr;
 
-                    } else if parent_node.right == current {
-                        parent_node.right = inorder_succ_ptr;
-                    }
-                }
+                        } else if parent_node.right == current {
+                            parent_node.right = inorder_succ_ptr;
+                        }
+                    },
 
-                // Update the root node if that is what we're removing
-                if self.root == current {
-                    self.root = inorder_succ_ptr;
+                    // No parent, so must be removing the root node
+                    None => {
+                        self.root = inorder_succ_ptr;
+                    },
                 }
 
                 // Safety: any indexes in the tree are valid in `self.nodes`
