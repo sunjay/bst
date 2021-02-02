@@ -972,7 +972,7 @@ mod tests {
 
             let seed = thread_rng().gen();
             println!("Seed: {:?}", seed);
-            let mut rng = StdRng::from_seed(seed);
+            let mut rng = StdRng::seed_from_u64(seed);
             for _ in 0..rng.gen_range(OPERATIONS..=OPERATIONS*2) {
                 assert_eq!(map.is_empty(), expected.is_empty());
                 assert_eq!(map.len(), expected.len());
