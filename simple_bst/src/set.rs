@@ -15,7 +15,7 @@ use std::iter::FromIterator;
 /// A "simple" BST that uses `Box` for internal storage, rather than arena allocating the nodes
 ///
 /// Used to test the `bst` crate
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct SimpleBSTSet<T> {
     items: crate::map::SimpleBSTMap<T, ()>,
 }
@@ -37,6 +37,14 @@ impl<T> fmt::Debug for SimpleBSTSet<T>
             .finish()
     }
 }
+
+impl<T: Ord + PartialEq> PartialEq for SimpleBSTSet<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.items.eq(&other.items)
+    }
+}
+
+impl<T: Ord + Eq> Eq for SimpleBSTSet<T> {}
 
 impl<T: Ord> SimpleBSTSet<T> {
     /// Creates an empty `SimpleBSTSet`
