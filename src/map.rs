@@ -591,11 +591,15 @@ impl<K: Ord, V> BSTMap<K, V> {
                 // Update the left child of the in-order successor
                 // Safety: if this was a valid pointer before, it is still valid now
                 inorder_succ_node.left = unsafe { Ptr::new_unchecked(left_index) };
-                // Store the right subtree of the in-order successor so we can use it when we remove
-                // the in-order successor from its parent
+                // Store the previous right subtree of the in-order successor (if any) so we can use
+                // it when we remove the in-order successor from its parent and swap it with the
+                // node being removed
                 let inorder_succ_right = inorder_succ_node.right;
+                // Since the in-order successor will replace the node being removed, its right
+                // child will be the right child of the node being removed.
                 // Update the right child of the in-order successor to be the right child of the
-                // `current` node being removed so we don't lose that subtree
+                // node being removed
+                //
                 // Only need to do this if the in-order successor is not already the right subtree
                 if inorder_succ != right_index {
                     // Safety: if this was a valid pointer before, it is still valid now

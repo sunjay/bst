@@ -398,7 +398,7 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
                 //   this cannot alias `node`.
                 // WARNING: it is probably UB to use `node` past this point since it technically
                 //   aliases with part of the data in `parent_node`
-                let mut parent_node = unsafe { parent.as_mut() };
+                let parent_node = unsafe { parent.as_mut() };
                 match parent_node {
                     // Remove the node from the parent
                     Some(parent) => {
@@ -435,7 +435,7 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
                 //   entirely, so that can't alias either.
                 // WARNING: it is probably UB to use `node` past this point since it technically
                 //   aliases with part of the data in `parent_node`
-                let mut parent_node = unsafe { parent.as_mut() };
+                let parent_node = unsafe { parent.as_mut() };
                 match parent_node {
                     // Remove the node from the parent
                     Some(parent) => {
@@ -469,16 +469,16 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
             },
 
             // Two child nodes, swap the current node for its in-order successor
-            (Some(left_child), Some(right_child)) => {
+            (Some(left_child), Some(mut right_child)) => {
                 // the parent of `right_child` is `current`
                 let mut inorder_succ_parent = current;
                 let mut inorder_succ = &mut right_child as *mut _;
 
                 loop {
                     // Safety: any values assigned to `inorder_succ` originate from a valid &mut ref
-                    let node: &mut Node<K, V> = unsafe { &mut *inorder_succ };
+                    let next_node: &mut Node<K, V> = unsafe { &mut *inorder_succ };
 
-                    match node.left_mut() {
+                    match next_node.left_mut() {
                         Some(node_left_child) => {
                             inorder_succ_parent = inorder_succ;
                             inorder_succ = node_left_child;
@@ -495,37 +495,73 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
                 // Update the left child of the in-order successor to the left child of the node
                 // we're removing
                 inorder_succ_node.set_left(left_child);
+                // Store the previous right subtree of the in-order successor (if any) so we can use
+                // it when we remove the in-order successor from its parent and swap it with the
+                // node being removed
+                let inorder_succ_right = if !ptr::eq(inorder_succ, &right_child) {
+                    // Since the in-order successor will replace the node being removed, its right
+                    // child will be the right child of the node being removed.
+                    // Update the right child of the in-order successor to be the right child of the
+                    // node being removed
+                    //
+                    // Only need to do this if the in-order successor is not already the right subtree
+                    inorder_succ_node.replace_right(right_child)
+                } else {
+                    inorder_succ_node.take_right()
+                };
 
                 // Safety: any values assigned to `inorder_succ_parent` come from valid &mut references
                 //   Note that this node may be the same the `node` variable from `current`, so that
                 //   variable cannot be used past this point without two mutable references to the
                 //   same data.
                 let inorder_succ_parent_node = unsafe { &mut *inorder_succ_parent };
-
-                // Remove the in-order successor from its parent (the parent might be `current`)
+                // Remove the in-order successor from its parent (the parent might be the current node)
                 // Note: in-order successor is always the zero or one child remove case since we
                 // find it by checking if there is a left child
-                if inorder_succ_parent == current {
-                } else {
-                    // Update the right child of the in-order successor to be the right child of the
-                    // node being removed so we don't lose that subtree
-                    //
-                    // Only need to do this if the in-order successor is not already the right subtree
-
-                    // UB if we assign the same node as its own child
-                    debug_assert!(!ptr::eq(inorder_succ, &mut right_child));
-                    inorder_succ_node.set_right(right_child);
-                }
-
-                if inorder_succ_parent == current {
+                let inorder_succ_node = if inorder_succ_parent == current {
                     // Remove the right child from the current node
-                    inorder_succ_parent_node.right = inorder_succ_right;
+                    inorder_succ_parent_node.take_right()
                 } else {
                     // Remove the left child from the parent of the in-order successor
-                    inorder_succ_parent_node.left = inorder_succ_right;
-                }
+                    inorder_succ_parent_node.replace_left(inorder_succ_right)
+                };
 
-                todo!()
+                // Safety: the parent node is guaranteed to be different from the current node, so
+                //   this cannot alias `node`. Furthermore, we've removed `child` from `node`
+                //   entirely, so that can't alias either.
+                // WARNING: it is probably UB to use `node` past this point since it technically
+                //   aliases with part of the data in `parent_node`
+                let parent_node = unsafe { parent.as_mut() };
+                match parent_node {
+                    // Remove the node from the parent
+                    Some(parent) => {
+                        // Making a shadowed `node` variable since the old `node` reference is
+                        // totally invalidated now
+                        let node = if ptr::eq(current, as_ptr(parent.left())) {
+                            // This unwrap is safe because we know that we're replacing `node`, not
+                            // an empty slot
+                            parent.replace_left(inorder_succ_node).unwrap()
+
+                        // We know that `node` must be either `left` or `right` because
+                        // that's how we found it above. (this assumes `parent` is computed right)
+                        } else {
+                            // This unwrap is safe because we know that we're replacing `node`, not
+                            // an empty slot
+                            parent.replace_right(inorder_succ_node).unwrap()
+                        };
+
+                        Some(node.into_inner())
+                    },
+
+                    // Node is the root node (no parent)
+                    None => {
+                        // This unwrap is safe because if we get to this point there must be at
+                        // least one node
+                        let node = mem::replace(&mut self.root, inorder_succ_node).unwrap();
+
+                        Some(node.into_inner())
+                    },
+                }
             },
         }
     }
