@@ -58,15 +58,33 @@ impl<K, V> Node<K, V> {
         self.right.as_deref_mut()
     }
 
+    pub(crate) fn take_left(&mut self) -> Option<Self> {
+        self.left.take().map(|node| *node)
+    }
+
+    pub(crate) fn take_right(&mut self) -> Option<Self> {
+        self.right.take().map(|node| *node)
+    }
+
     /// New node MUST maintain BST property
-    pub(crate) fn set_left(&mut self, new_node: Self) -> Option<Box<Self>> {
+    pub(crate) fn set_left(&mut self, new_node: Self) {
         debug_assert!(self.left.is_none());
+        self.left = Some(Box::new(new_node));
+    }
+
+    /// New node MUST maintain BST property
+    pub(crate) fn set_right(&mut self, new_node: Self) {
+        debug_assert!(self.right.is_none());
+        self.right = Some(Box::new(new_node));
+    }
+
+    /// New node MUST maintain BST property
+    pub(crate) fn replace_left(&mut self, new_node: Self) -> Option<Box<Self>> {
         mem::replace(&mut self.left, Some(Box::new(new_node)))
     }
 
     /// New node MUST maintain BST property
-    pub(crate) fn set_right(&mut self, new_node: Self) -> Option<Box<Self>> {
-        debug_assert!(self.right.is_none());
+    pub(crate) fn replace_right(&mut self, new_node: Self) -> Option<Box<Self>> {
         mem::replace(&mut self.right, Some(Box::new(new_node)))
     }
 

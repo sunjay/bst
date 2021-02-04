@@ -391,7 +391,7 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
         // If we get to this point, we are definitely removing a node, so decrement `len`
         self.len -= 1;
 
-        match (node.left_mut(), node.right_mut()) {
+        match (node.take_left(), node.take_right()) {
             // No child nodes, just delete the node
             (None, None) => {
                 // Safety: the parent node is guaranteed to be different from the current node, so
@@ -428,11 +428,8 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
             },
 
             // Only one child node, so we can just replace the node with its child
-            (None, child@Some(_)) |
-            (child@Some(_), None) => {
-                // Remove the child from the current node
-                let child = child.take();
-
+            (None, Some(child)) |
+            (Some(child), None) => {
                 // Safety: the parent node is guaranteed to be different from the current node, so
                 //   this cannot alias `node`. Furthermore, we've removed `child` from `node`
                 //   entirely, so that can't alias either.
@@ -445,12 +442,16 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
                         // Making a shadowed `node` variable since the old `node` reference is
                         // totally invalidated now
                         let node = if ptr::eq(current, as_ptr(parent.left())) {
-                            parent.set_left(child).unwrap()
+                            // This unwrap is safe because we know that we're replacing `node`, not
+                            // an empty slot
+                            parent.replace_left(child).unwrap()
 
                         // We know that `node` must be either `left` or `right` because
                         // that's how we found it above. (this assumes `parent` is computed right)
                         } else {
-                            parent.set_right(child).unwrap()
+                            // This unwrap is safe because we know that we're replacing `node`, not
+                            // an empty slot
+                            parent.replace_right(child).unwrap()
                         };
 
                         Some(node.into_inner())
@@ -468,54 +469,55 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
             },
 
             // Two child nodes, swap the current node for its in-order successor
-            (Some(left_index), Some(right_index)) => {
-                // the parent of `right_index` is the index from `current`
-                let mut inorder_succ_parent = index;
-                let mut inorder_succ = right_index;
+            (Some(left_child), Some(right_child)) => {
+                // the parent of `right_child` is `current`
+                let mut inorder_succ_parent = current;
+                let mut inorder_succ = &mut right_child as *mut _;
 
                 loop {
-                    // Safety: any indexes from the tree are valid in `self.nodes`
-                    let node = unsafe { self.nodes.get_unchecked(inorder_succ) };
+                    // Safety: any values assigned to `inorder_succ` originate from a valid &mut ref
+                    let node: &mut Node<K, V> = unsafe { &mut *inorder_succ };
 
-                    match node.left.into_index() {
-                        Some(node_left_index) => {
+                    match node.left_mut() {
+                        Some(node_left_child) => {
                             inorder_succ_parent = inorder_succ;
-                            inorder_succ = node_left_index;
+                            inorder_succ = node_left_child;
                         },
 
                         None => break,
                     }
                 }
 
-                // Safety: any indexes from the tree are valid in `self.nodes`
-                //   This index may not be unique from `index`, so `node` may not be used again
-                //   after this line. If it is, the lifetime of `node` and this variable will
-                //   overlap and we'll have both a mutable ref and immutable ref to the same data.
-                let inorder_succ_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ) };
-                // Update the left child of the in-order successor
-                // Safety: if this was a valid pointer before, it is still valid now
-                inorder_succ_node.left = unsafe { Ptr::new_unchecked(left_index) };
-                // Store the right subtree of the in-order successor so we can use it when we remove
-                // the in-order successor from its parent
-                let inorder_succ_right = inorder_succ_node.right;
-                // Update the right child of the in-order successor to be the right child of the
-                // `current` node being removed so we don't lose that subtree
-                // Only need to do this if the in-order successor is not already the right subtree
-                if inorder_succ != right_index {
-                    // Safety: if this was a valid pointer before, it is still valid now
-                    inorder_succ_node.right = unsafe { Ptr::new_unchecked(right_index) };
-                }
+                // Safety: any values assigned to `inorder_succ` come from valid &mut references
+                //   Note that we can only use the `right_child` variable at the same time as this
+                //   variable if the `inorder_succ` pointer does not point to `right_child`
+                let inorder_succ_node = unsafe { &mut *inorder_succ };
+                // Update the left child of the in-order successor to the left child of the node
+                // we're removing
+                inorder_succ_node.set_left(left_child);
 
-                // Safety: any indexes from the tree are valid in `self.nodes`
-                //   Furthermore, the only other reference in scope is `node`. Since we started
-                //   finding `inorder_succ` at `right_index`, and `right_index` is not the same
-                //   as `index` (from `current`), we know that `inorder_succ_parent_index`
-                //   cannot be the same as `index`. Thus, this mutable reference is unique.
-                let inorder_succ_parent_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ_parent) };
-                // Remove the in-order successor from its parent (the parent might be the current node)
+                // Safety: any values assigned to `inorder_succ_parent` come from valid &mut references
+                //   Note that this node may be the same the `node` variable from `current`, so that
+                //   variable cannot be used past this point without two mutable references to the
+                //   same data.
+                let inorder_succ_parent_node = unsafe { &mut *inorder_succ_parent };
+
+                // Remove the in-order successor from its parent (the parent might be `current`)
                 // Note: in-order successor is always the zero or one child remove case since we
                 // find it by checking if there is a left child
-                if inorder_succ_parent == index {
+                if inorder_succ_parent == current {
+                } else {
+                    // Update the right child of the in-order successor to be the right child of the
+                    // node being removed so we don't lose that subtree
+                    //
+                    // Only need to do this if the in-order successor is not already the right subtree
+
+                    // UB if we assign the same node as its own child
+                    debug_assert!(!ptr::eq(inorder_succ, &mut right_child));
+                    inorder_succ_node.set_right(right_child);
+                }
+
+                if inorder_succ_parent == current {
                     // Remove the right child from the current node
                     inorder_succ_parent_node.right = inorder_succ_right;
                 } else {
@@ -523,36 +525,7 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
                     inorder_succ_parent_node.left = inorder_succ_right;
                 }
 
-                // Safety: the code above guarantees that in-order successor is a valid pointer and
-                //   will not be `usize::MAX` (since all indexes in the tree are valid)
-                let inorder_succ_ptr = unsafe { Ptr::new_unchecked(inorder_succ) };
-                // Assign the in-order successor as the new child of the parent of `current`
-                if let Some(parent_index) = parent.into_index() {
-                    // Safety: any indexes from the tree are valid in `self.nodes`
-                    let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
-
-                    if parent_node.left == current {
-                        parent_node.left = inorder_succ_ptr;
-
-                    } else if parent_node.right == current {
-                        parent_node.right = inorder_succ_ptr;
-                    }
-                }
-
-                // Update the root node if that is what we're removing
-                if self.root == current {
-                    self.root = inorder_succ_ptr;
-                }
-
-                // Safety: any indexes in the tree are valid in `self.nodes`
-                //   The previous `node` variable which was referencing this memory will end here so
-                //   there is no overlap in lifetimes. The `inorder_succ_node` which may also
-                //   overlap is also not used after this point, so there will be no overlap in
-                //   lifetime there either. We also shadow the name to extra make sure that there
-                //   can be no UB.
-                let node = unsafe { self.nodes.remove(index) };
-
-                Some((node.key, node.value))
+                todo!()
             },
         }
     }
