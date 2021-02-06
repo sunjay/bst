@@ -77,12 +77,13 @@ impl_map!(BTreeMap, Ord);
 impl_map!(SimpleBSTMap, Ord);
 impl_map!(BSTMap, Ord);
 
+#[derive(Debug)]
 struct MovieRequest {
     pub title: Rc<str>,
     pub genre: Rc<str>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Counters<M: Map<Rc<str>, usize>> {
     pub titles: M,
     pub genres: M,
