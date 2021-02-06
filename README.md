@@ -3,18 +3,22 @@
 [![Build Status](https://github.com/sunjay/bst/workflows/CI/badge.svg)](https://github.com/sunjay/bst/actions)
 [![Line Count](https://tokei.rs/b1/github/sunjay/bst)](https://github.com/sunjay/bst)
 
-This library implements a map type `BSTMap` and a set type `BSTSet` (coming soon!) based on a binary
-search tree. The API is designed to be similar in usage to types like `HashMap`/`HashSet` and
-`BTreeMap`/`BTreeSet` while also providing the ability to implement your own traversals using lower
-level `root` and `root_mut` methods.
+This library implements a map type `BSTMap` and a set type `BSTSet` based on a binary search tree.
+The API is designed to be similar in usage to types like `HashMap`/`HashSet` and
+`BTreeMap`/`BTreeSet` while also providing the ability to implement your own traversals using the
+lower level `root` and `root_mut` methods.
 
-Rather than performing an allocation per node, these data structures are backed by a `Vec` which
-only allocates occasionally to increase its capacity. Indexes are used internally to keep node IDs
-from being invalidated. All of these details are completely hidden in the API. The `root` and
-`root_mut` methods return types that provide `left` and `right` methods for convenient and intuitive
-traversal through the tree. It almost feels like the tree API you would expect in a garbage
-collected language, but without the extra overhead and with all the usual protections of the Rust
-borrow checker.
+Rather than performing an allocation per node, these data structures are backed by an arena
+allocator that only allocates occasionally to increase its capacity. The arena allocates memory in
+chunks without invalidating any addresses it previously produced. This is great for insertion
+performance since we don't have to copy and update all the previously allocated nodes every time we
+need more space. There is also a good probability that the nodes you are operating on are laid out
+contiguously in memory which is great for cache locality.
+
+The `root` and `root_mut` methods return types that provide `left` and `right` methods for
+convenient and intuitive traversal through the tree. It almost feels like the tree API you would
+expect in a garbage collected language, but without the extra overhead and with all the usual
+protections of the Rust borrow checker.
 
 ```rust
 use bst::{BSTMap, map::Node};
