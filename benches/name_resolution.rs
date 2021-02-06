@@ -7,7 +7,7 @@ use std::borrow::Borrow;
 use std::hash::Hash;
 use std::rc::Rc;
 use std::cmp;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use rand::prelude::*;
 use rand::seq::SliceRandom;
@@ -21,6 +21,7 @@ use criterion::{
     measurement::WallTime,
 };
 use simple_bst::SimpleBSTMap;
+use fnv::FnvHashMap as HashMap;
 
 use bst::BSTMap;
 
