@@ -176,20 +176,41 @@ impl<T: Ord> SimpleBSTSet<T> {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// use simple_bst::SimpleBSTSet;
     ///
     /// let mut set = SimpleBSTSet::new();
     /// set.insert(String::from("abc"));
-    /// assert_eq!(set.remove("abc"), Some("abc"));
-    /// assert_eq!(set.remove("def"), None);
+    /// assert!(set.remove("abc"));
+    /// assert!(!set.remove("def"));
     /// ```
-    pub fn remove<Q>(&mut self, _value: &Q) -> bool
+    pub fn remove<Q>(&mut self, value: &Q) -> bool
         where T: Borrow<Q>,
               Q: Ord + ?Sized,
     {
-        //TODO: Re-enable doctest for this method
-        todo!()
+        self.take(value).is_some()
+    }
+
+    /// Removes and returns the value in the set, if any, that is equal to the given one.
+    ///
+    /// The value may be any borrowed form of the set's value type, but the ordering on the borrowed
+    /// form must match the ordering on the value type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use simple_bst::SimpleBSTSet;
+    ///
+    /// let mut set = SimpleBSTSet::new();
+    /// set.insert(String::from("abc"));
+    /// assert_eq!(set.take("abc"), Some(String::from("abc")));
+    /// assert_eq!(set.take("def"), None);
+    /// ```
+    pub fn take<Q>(&mut self, value: &Q) -> Option<T>
+        where T: Borrow<Q>,
+              Q: Ord + ?Sized,
+    {
+        self.items.remove_entry(value).map(|(value, ())| value)
     }
 
     /// Clears the set, removing all elements
