@@ -159,6 +159,29 @@ fn benchmark_gets<M: Map<i64, usize>>(keys: &Keys, map: &mut M, gets: usize) {
     }
 }
 
+/// Setup function for benchmark_removes
+fn setup_benchmark_removes<M: Map<i64, usize>>(keys: &Keys, removes: usize) -> M {
+    let mut map = M::new();
+
+    for key_i in 0..removes {
+        black_box(map.insert(keys.get(key_i as i64), key_i));
+    }
+
+    map
+}
+
+/// Runs many consecutive remove operations on a map
+fn benchmark_removes<M: Map<i64, usize>>(keys: &Keys, map: &mut M, removes: usize) {
+    for i in 0..removes {
+        // Remove keys in the opposite order to how they were inserted
+        let key_i = removes - i - 1;
+        let key = keys.get(key_i as i64);
+        black_box(map.remove(&key));
+        // Should always yield `None` since item has been removed
+        black_box(map.remove(&key));
+    }
+}
+
 /// Runs a bunch of operations on a map
 fn benchmark_map_ops<M: Map<i64, usize>>(keys: &Keys, steps: usize) -> M {
     const MAX_INSERTS: usize = 5;
@@ -301,6 +324,34 @@ pub fn bench_map_get(c: &mut Criterion) {
     group.finish();
 }
 
+pub fn bench_map_remove(c: &mut Criterion) {
+    const REMOVES: &[usize] = &[100, 500, 1000, 2000, 4000];
+
+    #[inline(always)]
+    fn bench<M: Map<i64, usize>>(
+        name: &'static str,
+        group: &mut BenchmarkGroup<WallTime>,
+        keys: &Keys,
+        removes: &usize,
+    ) {
+        group.bench_with_input(BenchmarkId::new(name, removes), removes, |b, &removes| {
+            let mut map = setup_benchmark_removes(&keys, removes);
+            b.iter(|| benchmark_removes::<M>(&keys, &mut map, removes))
+        });
+    }
+
+    let keys = Keys::generate(slice_max(REMOVES) as u32);
+
+    let mut group = c.benchmark_group("map remove");
+    for removes in REMOVES {
+        bench::<HashMap<i64, usize>>("HashMap", &mut group, &keys, removes);
+        bench::<BTreeMap<i64, usize>>("BTreeMap", &mut group, &keys, removes);
+        bench::<SimpleBSTMap<i64, usize>>("SimpleBSTMap", &mut group, &keys, removes);
+        bench::<BSTMap<i64, usize>>("BSTMap", &mut group, &keys, removes);
+    }
+    group.finish();
+}
+
 pub fn bench_map_ops(c: &mut Criterion) {
     const STEPS: &[usize] = &[100, 500, 1000, 2000, 4000];
 
@@ -389,6 +440,7 @@ pub fn bench_map_get_multi(c: &mut Criterion) {
 criterion_group!(benches,
     bench_map_insert,
     bench_map_get,
+    bench_map_remove,
     bench_map_ops,
     bench_map_insert_multi,
     bench_map_get_multi,

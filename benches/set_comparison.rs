@@ -151,6 +151,29 @@ fn benchmark_gets<M: Set<i64>>(values: &Values, set: &mut M, gets: usize) {
     }
 }
 
+/// Setup function for benchmark_removes
+fn setup_benchmark_removes<M: Set<i64>>(values: &Values, removes: usize) -> M {
+    let mut set = M::new();
+
+    for value_i in 0..removes {
+        black_box(set.insert(values.get(value_i as i64)));
+    }
+
+    set
+}
+
+/// Runs many consecutive remove operations on a set
+fn benchmark_removes<M: Set<i64>>(values: &Values, set: &mut M, removes: usize) {
+    for i in 0..removes {
+        // Remove values in the opposite order to how they were inserted
+        let value_i = removes - i - 1;
+        let value = values.get(value_i as i64);
+        black_box(set.remove(&value));
+        // Should always yield `false` since item has been removed
+        black_box(set.remove(&value));
+    }
+}
+
 /// Runs a bunch of operations on a set
 fn benchmark_set_ops<M: Set<i64>>(values: &Values, steps: usize) -> M {
     const MAX_INSERTS: usize = 5;
@@ -245,6 +268,33 @@ pub fn bench_set_get(c: &mut Criterion) {
     group.finish();
 }
 
+pub fn bench_set_remove(c: &mut Criterion) {
+    const REMOVES: &[usize] = &[50, 100, 500, 1000, 2000];
+
+    let values = Values::generate(slice_max(REMOVES) as u32);
+
+    let mut group = c.benchmark_group("set remove");
+    for removes in REMOVES {
+        group.bench_with_input(BenchmarkId::new("HashSet", removes), removes, |b, &removes| {
+            let mut set = setup_benchmark_removes(&values, removes);
+            b.iter(|| benchmark_removes::<HashSet<i64>>(&values, &mut set, removes))
+        });
+        group.bench_with_input(BenchmarkId::new("BTreeSet", removes), removes, |b, &removes| {
+            let mut set = setup_benchmark_removes(&values, removes);
+            b.iter(|| benchmark_removes::<BTreeSet<i64>>(&values, &mut set, removes))
+        });
+        group.bench_with_input(BenchmarkId::new("SimpleBSTSet", removes), removes, |b, &removes| {
+            let mut set = setup_benchmark_removes(&values, removes);
+            b.iter(|| benchmark_removes::<SimpleBSTSet<i64>>(&values, &mut set, removes))
+        });
+        group.bench_with_input(BenchmarkId::new("BSTSet", removes), removes, |b, &removes| {
+            let mut set = setup_benchmark_removes(&values, removes);
+            b.iter(|| benchmark_removes::<BSTSet<i64>>(&values, &mut set, removes))
+        });
+    }
+    group.finish();
+}
+
 pub fn bench_set_ops(c: &mut Criterion) {
     const STEPS: &[usize] = &[50, 100, 1000, 2000, 4000];
 
@@ -272,6 +322,7 @@ pub fn bench_set_ops(c: &mut Criterion) {
 criterion_group!(benches,
     bench_set_insert,
     bench_set_get,
+    bench_set_remove,
     bench_set_ops,
 );
 
