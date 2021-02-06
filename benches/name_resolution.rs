@@ -67,7 +67,7 @@ struct Counters {
     incorrect_num_args: usize,
 }
 
-fn benchmark_name_resolution<M: Map<Rc<str>, usize>>(program: &Block) -> Counters {
+fn resolve_program<M: Map<Rc<str>, usize>>(program: &Block) -> Counters {
     let mut counters = Counters::default();
 
     let mut scope_stack = Vec::new();
@@ -265,7 +265,7 @@ pub fn bench_name_resolution(c: &mut Criterion) {
     ) {
         group.bench_with_input(BenchmarkId::new(name, stmts), stmts, |b, &stmts| {
             let program = generate_program(stmts, MAX_DEPTH);
-            b.iter(|| benchmark_name_resolution::<M>(&program))
+            b.iter(|| resolve_program::<M>(&program))
         });
     }
 
