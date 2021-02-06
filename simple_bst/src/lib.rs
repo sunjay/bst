@@ -1,4 +1,4 @@
-#![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::unknown_clippy_lints, clippy::upper_case_acronyms)]
 
 pub mod map;
 pub mod set;
