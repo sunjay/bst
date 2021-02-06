@@ -1051,7 +1051,7 @@ mod tests {
         //   2     5
         // 1   3
         //
-        // Inserting the tree one level at a time so it makes this shape:
+        // Inserting each node one level at a time so it makes this shape
         map.insert(4, 4);
         map.insert(5, 5);
         map.insert(2, 2);
@@ -1066,6 +1066,37 @@ mod tests {
 
         let values: Vec<_> = map.iter_postorder().map(|(k, _)| *k).collect();
         assert_eq!(&values, &[1, 3, 2, 5, 4]);
+    }
+
+    #[test]
+    fn test_map_remove_traverse() {
+        //TODO: This test is brittle and relies on insertion behaviour. Really we want to encode the
+        // shape of the tree in the test itself. Maybe with some unsafe `with_tree_structure`
+        // constructor for BSTMap or something.
+
+        let mut map = BSTMap::new();
+        // Create the following tree:
+        //      4
+        //   2     5
+        // 1
+        //
+        // Inserting each node one level at a time so it makes this shape
+        map.insert(4, 4);
+        map.insert(2, 2);
+        map.insert(5, 5);
+        map.insert(1, 1);
+
+        let values: Vec<_> = map.iter_preorder().map(|(k, _)| *k).collect();
+        assert_eq!(&values, &[4, 2, 1, 5]);
+
+        // Remove a node that has both a parent and child and make sure it is definitely no longer
+        // referenced anywhere in the tree (and also that we don't lose its child)
+        assert_eq!(map.remove(&2), Some(2));
+        assert_eq!(map.remove(&2), None);
+
+        // Should still be able to traverse with no UB
+        let values: Vec<_> = map.iter_preorder().map(|(k, _)| *k).collect();
+        assert_eq!(&values, &[4, 1, 5]);
     }
 
     #[test]
