@@ -1,5 +1,8 @@
 # Binary Search Tree (BST)
 
+[![Build Status](https://github.com/sunjay/bst/workflows/CI/badge.svg)](https://github.com/sunjay/bst/actions)
+[![Line Count](https://tokei.rs/b1/github/sunjay/bst)](https://github.com/sunjay/bst)
+
 This library implements a map type `BSTMap` and a set type `BSTSet` (coming soon!) based on a binary
 search tree. The API is designed to be similar in usage to types like `HashMap`/`HashSet` and
 `BTreeMap`/`BTreeSet` while also providing the ability to implement your own traversals using lower
