@@ -526,8 +526,6 @@ mod tests {
                         assert_eq!(set.get(&value), expected.get(&value));
                     },
 
-                    //TODO: Test `remove()`
-
                     _ => unreachable!(),
                 }
             }
