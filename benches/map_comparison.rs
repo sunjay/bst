@@ -163,7 +163,7 @@ fn benchmark_gets<M: Map<i64, usize>>(keys: &Keys, map: &mut M, gets: usize) {
 fn benchmark_map_ops<M: Map<i64, usize>>(keys: &Keys, steps: usize) -> M {
     const MAX_INSERTS: usize = 5;
     const MAX_GETS: usize = 3;
-    // const MAX_REMOVES: usize = 2;
+    const MAX_REMOVES: usize = 2;
 
     let mut map = M::new();
 
@@ -196,13 +196,12 @@ fn benchmark_map_ops<M: Map<i64, usize>>(keys: &Keys, steps: usize) -> M {
             }
         }
 
-        //TODO: Uncomment this when `BSTMap::remove` is implemented
         // Remove several values
-        // let removes = MAX_REMOVES - (i % MAX_REMOVES);
-        // for j in 0..removes {
-        //     let key = make_key(key_i - j as i64);
-        //     black_box(map.remove(&key));
-        // }
+        let removes = MAX_REMOVES - (i % MAX_REMOVES);
+        for j in 0..removes {
+            let key = keys.get(key_i - j as i64);
+            black_box(map.remove(&key));
+        }
     }
 
     map

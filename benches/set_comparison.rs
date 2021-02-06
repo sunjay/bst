@@ -155,7 +155,7 @@ fn benchmark_gets<M: Set<i64>>(values: &Values, set: &mut M, gets: usize) {
 fn benchmark_set_ops<M: Set<i64>>(values: &Values, steps: usize) -> M {
     const MAX_INSERTS: usize = 5;
     const MAX_GETS: usize = 3;
-    // const MAX_REMOVES: usize = 2;
+    const MAX_REMOVES: usize = 2;
 
     let mut set = M::new();
 
@@ -184,13 +184,12 @@ fn benchmark_set_ops<M: Set<i64>>(values: &Values, steps: usize) -> M {
             };
         }
 
-        //TODO: Uncomment this when `BSTSet::remove` is implemented
         // Remove several values
-        // let removes = MAX_REMOVES - (i % MAX_REMOVES);
-        // for j in 0..removes {
-        //     let value = make_value(value_i - j as i64);
-        //     black_box(set.remove(&value));
-        // }
+        let removes = MAX_REMOVES - (i % MAX_REMOVES);
+        for j in 0..removes {
+            let value = values.get(value_i - j as i64);
+            black_box(set.remove(&value));
+        }
     }
 
     set
