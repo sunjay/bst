@@ -492,12 +492,27 @@ mod tests {
                             Some(value) => value,
                             None => continue,
                         };
+
                         assert_eq!(set.contains(&value), expected.contains(&value));
                         assert_eq!(set.get(&value), expected.get(&value));
                     },
 
+                    // Remove an existing value
+                    41..=60 => {
+                        let value = match values.choose(&mut rng).copied() {
+                            Some(value) => value,
+                            None => continue,
+                        };
+
+                        assert_eq!(set.take(&value), expected.take(&value));
+                        // Should always return `None`
+                        assert_eq!(set.take(&value), expected.take(&value));
+                        // Should always be `false` since value has been removed already
+                        assert_eq!(set.remove(&value), expected.remove(&value));
+                    },
+
                     // Insert a value
-                    41..=100 => {
+                    61..=100 => {
                         // Only inserting positive values
                         let value = rng.gen_range(0..=64);
                         values.push(value);
