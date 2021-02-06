@@ -488,28 +488,6 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
                     }
                 }
 
-                // Safety: any values assigned to `inorder_succ` come from valid &mut references
-                //   Note that we can only use the `right_child` variable at the same time as this
-                //   variable if the `inorder_succ` pointer does not point to `right_child`
-                let inorder_succ_node = unsafe { &mut *inorder_succ };
-                // Update the left child of the in-order successor to the left child of the node
-                // we're removing
-                inorder_succ_node.set_left(left_child);
-                // Store the previous right subtree of the in-order successor (if any) so we can use
-                // it when we remove the in-order successor from its parent and swap it with the
-                // node being removed
-                let inorder_succ_right = if !ptr::eq(inorder_succ, &right_child) {
-                    // Since the in-order successor will replace the node being removed, its right
-                    // child will be the right child of the node being removed.
-                    // Update the right child of the in-order successor to be the right child of the
-                    // node being removed
-                    //
-                    // Only need to do this if the in-order successor is not already the right subtree
-                    inorder_succ_node.replace_right(right_child)
-                } else {
-                    inorder_succ_node.take_right()
-                };
-
                 // Safety: any values assigned to `inorder_succ_parent` come from valid &mut references
                 //   Note that this node may be the same the `node` variable from `current`, so that
                 //   variable cannot be used past this point without two mutable references to the
@@ -518,13 +496,33 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
                 // Remove the in-order successor from its parent (the parent might be the current node)
                 // Note: in-order successor is always the zero or one child remove case since we
                 // find it by checking if there is a left child
-                let inorder_succ_node = if inorder_succ_parent == current {
+                let mut inorder_succ_node = if inorder_succ_parent == current {
+                    // If `inorder_succ_parent == current`, then `inorder_succ` is `right_child`
+                    let inorder_succ_right = right_child.take_right();
                     // Remove the right child from the current node
-                    inorder_succ_parent_node.take_right()
+                    inorder_succ_parent_node.replace_right(inorder_succ_right).unwrap()
+
                 } else {
+                    // Safety: any values assigned to `inorder_succ` come from valid &mut references
+                    //   Note that we can only use the `right_child` variable at the same time as
+                    //   this variable since the `inorder_succ` pointer does not point to `right_child`
+                    let inorder_succ_node = unsafe { &mut *inorder_succ };
+
+                    // Since the in-order successor will replace the node being removed, its right
+                    // child will be the right child of the node being removed.
+                    // Update the right child of the in-order successor to be the right child of the
+                    // node being removed
+                    //
+                    // Only need to do this if the in-order successor is not already the right subtree
+                    let inorder_succ_right = inorder_succ_node.replace_right(right_child);
+
                     // Remove the left child from the parent of the in-order successor
-                    inorder_succ_parent_node.replace_left(inorder_succ_right)
+                    inorder_succ_parent_node.replace_left(inorder_succ_right).unwrap()
                 };
+
+                // Update the left child of the in-order successor to the left child of the node
+                // we're removing since the in-order successor is replacing the node being removed
+                inorder_succ_node.set_left(left_child);
 
                 // Safety: the parent node is guaranteed to be different from the current node, so
                 //   this cannot alias `node`. Furthermore, we've removed `child` from `node`
@@ -557,7 +555,7 @@ impl<K: Ord, V> SimpleBSTMap<K, V> {
                     None => {
                         // This unwrap is safe because if we get to this point there must be at
                         // least one node
-                        let node = mem::replace(&mut self.root, inorder_succ_node).unwrap();
+                        let node = mem::replace(&mut self.root, Some(inorder_succ_node)).unwrap();
 
                         Some(node.into_inner())
                     },
