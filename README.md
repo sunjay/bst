@@ -70,8 +70,8 @@ fn main() {
     - [ ] `entry`
     - [x] `contains_key`
     - [x] `insert`
-    - [ ] `remove`
-    - [ ] `remove_entry`
+    - [x] `remove`
+    - [x] `remove_entry`
     - [ ] `retain` - arbitrary order?
     - [x] `clear`
     - [x] `iter_preorder` - pre-order traversal
@@ -103,7 +103,8 @@ fn main() {
     - [x] `get`
     - [x] `contains`
     - [x] `insert`
-    - [ ] `remove`
+    - [x] `remove`
+    - [x] `take`
     - [ ] `retain` - arbitrary order?
     - [x] `clear`
     - [x] `iter_preorder` - pre-order traversal
