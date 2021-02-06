@@ -34,3 +34,7 @@ harness = false
 [[bench]]
 name = "name_resolution"
 harness = false
+
+[[bench]]
+name = "movie_requests"
+harness = false
