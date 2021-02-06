@@ -79,22 +79,12 @@ impl<K, V> Node<K, V> {
     }
 
     /// New node MUST maintain BST property
-    pub(crate) fn replace_left<N: Into<Option<Self>>>(&mut self, new_node: N) -> Option<Self> {
-        let new_node = new_node.into().map(Box::new);
-        mem::replace(&mut self.left, new_node).map(|node| *node)
+    pub(crate) fn replace_left(&mut self, new_node: Option<Self>) -> Option<Self> {
+        mem::replace(&mut self.left, new_node.map(Box::new)).map(|node| *node)
     }
 
     /// New node MUST maintain BST property
-    pub(crate) fn replace_right<N: Into<Option<Self>>>(&mut self, new_node: N) -> Option<Self> {
-        let new_node = new_node.into().map(Box::new);
-        mem::replace(&mut self.right, new_node).map(|node| *node)
-    }
-
-    pub(crate) fn remove_left(&mut self) -> Option<Self> {
-        self.left.take().map(|node| *node)
-    }
-
-    pub(crate) fn remove_right(&mut self) -> Option<Self> {
-        self.right.take().map(|node| *node)
+    pub(crate) fn replace_right(&mut self, new_node: Option<Self>) -> Option<Self> {
+        mem::replace(&mut self.right, new_node.map(Box::new)).map(|node| *node)
     }
 }
