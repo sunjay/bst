@@ -37,6 +37,7 @@ jobs:
           RUSTFLAGS: -D warnings
 
       - name: clippy
+        if: ${{ matrix.rust == 'nightly' }}
         uses: actions-rs/cargo@v1
         with:
           command: clippy
