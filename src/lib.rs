@@ -1,5 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 
+mod arena;
 mod slab;
 
 pub mod map;

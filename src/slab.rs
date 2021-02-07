@@ -375,7 +375,7 @@ impl<T> UnsafeSlab<T> {
         self.items.reserve(additional)
     }
 
-    /// Shrinks the capacity of the vector as much as possible.
+    /// Shrinks the capacity of the slab as much as possible.
     ///
     /// It will drop down as close as possible to the length but may still be greater.
     pub fn shrink_to_fit(&mut self) {
