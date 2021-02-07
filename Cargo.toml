@@ -38,3 +38,7 @@ harness = false
 [[bench]]
 name = "movie_requests"
 harness = false
+
+[[bench]]
+name = "two_sum"
+harness = false
