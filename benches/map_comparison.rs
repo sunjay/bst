@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::hash::Hash;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use rand::prelude::*;
 use criterion::{
@@ -13,12 +13,12 @@ use criterion::{
     measurement::WallTime,
 };
 use simple_bst::SimpleBSTMap;
+// Looking to measure map implementation, not hasher performance so using a faster hasher
+use fnv::FnvHashMap as HashMap;
 
 use bst::BSTMap;
 
-trait Map<K, V>: Clone {
-    fn new() -> Self;
-
+trait Map<K, V>: Default + Clone {
     fn len(&self) -> usize;
 
     fn get<Q>(&self, key: &Q) -> Option<&V>
@@ -41,10 +41,6 @@ macro_rules! impl_map {
         impl<K: Clone, V: Clone> Map<K, V> for $name<K, V>
             where K: $bound $(+ $other_bound)*,
         {
-            fn new() -> Self {
-                $name::new()
-            }
-
             fn len(&self) -> usize {
                 $name::len(self)
             }
@@ -128,7 +124,7 @@ fn slice_max<T: Copy + Ord>(data: &[T]) -> T {
 
 /// Runs many consecutive inserts on a map
 fn benchmark_inserts<M: Map<i64, usize>>(keys: &Keys, inserts: usize) -> M {
-    let mut map = M::new();
+    let mut map = M::default();
 
     for key_i in 0..inserts {
         black_box(map.insert(keys.get(key_i as i64), key_i));
@@ -139,7 +135,7 @@ fn benchmark_inserts<M: Map<i64, usize>>(keys: &Keys, inserts: usize) -> M {
 
 /// Setup function for benchmark_gets
 fn setup_benchmark_gets<M: Map<i64, usize>>(keys: &Keys, gets: usize) -> M {
-    let mut map = M::new();
+    let mut map = M::default();
 
     for key_i in 0..gets {
         black_box(map.insert(keys.get(key_i as i64), key_i));
@@ -161,7 +157,7 @@ fn benchmark_gets<M: Map<i64, usize>>(keys: &Keys, map: &mut M, gets: usize) {
 
 /// Setup function for benchmark_removes
 fn setup_benchmark_removes<M: Map<i64, usize>>(keys: &Keys, removes: usize) -> M {
-    let mut map = M::new();
+    let mut map = M::default();
 
     for key_i in 0..removes {
         black_box(map.insert(keys.get(key_i as i64), key_i));
@@ -188,7 +184,7 @@ fn benchmark_map_ops<M: Map<i64, usize>>(keys: &Keys, steps: usize) -> M {
     const MAX_GETS: usize = 3;
     const MAX_REMOVES: usize = 2;
 
-    let mut map = M::new();
+    let mut map = M::default();
 
     let mut key_i = 0;
     for i in 0..steps {
@@ -232,7 +228,7 @@ fn benchmark_map_ops<M: Map<i64, usize>>(keys: &Keys, steps: usize) -> M {
 
 /// Runs many consecutive inserts on a map
 fn benchmark_inserts_multi<M: Map<i64, usize>>(keys: &Keys, inserts: usize, n: usize) -> Vec<M> {
-    let mut maps = vec![M::new(); n];
+    let mut maps = vec![M::default(); n];
 
     for key_i in 0..inserts {
         for map in &mut maps {
@@ -245,7 +241,7 @@ fn benchmark_inserts_multi<M: Map<i64, usize>>(keys: &Keys, inserts: usize, n: u
 
 /// Setup function for benchmark_gets
 fn setup_benchmark_gets_multi<M: Map<i64, usize>>(keys: &Keys, gets: usize, n: usize) -> Vec<M> {
-    let mut maps = vec![M::new(); n];
+    let mut maps = vec![M::default(); n];
 
     for key_i in 0..gets {
         for map in &mut maps {

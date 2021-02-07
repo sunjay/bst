@@ -21,6 +21,7 @@ use criterion::{
     measurement::WallTime,
 };
 use simple_bst::SimpleBSTMap;
+// Looking to measure map implementation, not hasher performance so using a faster hasher
 use fnv::FnvHashMap as HashMap;
 
 use bst::BSTMap;

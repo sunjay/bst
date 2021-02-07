@@ -1,16 +1,16 @@
 use std::borrow::Borrow;
 use std::hash::Hash;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 
 use rand::prelude::*;
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use simple_bst::SimpleBSTSet;
+// Looking to measure set implementation, not hasher performance so using a faster hasher
+use fnv::FnvHashSet as HashSet;
 
 use bst::BSTSet;
 
-trait Set<T> {
-    fn new() -> Self;
-
+trait Set<T>: Default {
     fn len(&self) -> usize;
 
     fn contains<Q>(&self, value: &Q) -> bool
@@ -33,10 +33,6 @@ macro_rules! impl_set {
         impl<T> Set<T> for $name<T>
             where T: $bound $(+ $other_bound)*,
         {
-            fn new() -> Self {
-                $name::new()
-            }
-
             fn len(&self) -> usize {
                 $name::len(self)
             }
@@ -120,7 +116,7 @@ fn slice_max<T: Copy + Ord>(data: &[T]) -> T {
 
 /// Runs many consecutive inserts on a set
 fn benchmark_inserts<M: Set<i64>>(values: &Values, inserts: usize) -> M {
-    let mut set = M::new();
+    let mut set = M::default();
 
     for value_i in 0..inserts {
         black_box(set.insert(values.get(value_i as i64)));
@@ -131,7 +127,7 @@ fn benchmark_inserts<M: Set<i64>>(values: &Values, inserts: usize) -> M {
 
 /// Setup function for benchmark_gets
 fn setup_benchmark_gets<M: Set<i64>>(values: &Values, gets: usize) -> M {
-    let mut set = M::new();
+    let mut set = M::default();
 
     for value_i in 0..gets {
         black_box(set.insert(values.get(value_i as i64)));
@@ -153,7 +149,7 @@ fn benchmark_gets<M: Set<i64>>(values: &Values, set: &mut M, gets: usize) {
 
 /// Setup function for benchmark_removes
 fn setup_benchmark_removes<M: Set<i64>>(values: &Values, removes: usize) -> M {
-    let mut set = M::new();
+    let mut set = M::default();
 
     for value_i in 0..removes {
         black_box(set.insert(values.get(value_i as i64)));
@@ -180,7 +176,7 @@ fn benchmark_set_ops<M: Set<i64>>(values: &Values, steps: usize) -> M {
     const MAX_GETS: usize = 3;
     const MAX_REMOVES: usize = 2;
 
-    let mut set = M::new();
+    let mut set = M::default();
 
     let mut value_i = 0;
     for i in 0..steps {
