@@ -3,8 +3,21 @@ use std::ptr::NonNull;
 use std::mem::{self, MaybeUninit};
 use std::marker::PhantomData;
 
-trait AllocStrategy {
+/// The precise location of a value in a chunk
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct ChunkPos {
+    /// The index of the chunk to look in
+    pub chunk_index: usize,
+    /// The index within the chunk where the item will be
+    pub item_index: usize,
+}
 
+trait AllocStrategy {
+    /// Returns the length of the chunk with the given index
+    fn chunk_len(&self, chunk_i: usize) -> usize;
+
+    /// Returns the precise position of an item in the arena based on its index
+    fn position_for(&self, index: usize) -> ChunkPos;
 }
 
 #[derive(Debug, Default)]
@@ -17,7 +30,13 @@ impl ExponentialAlloc {
 }
 
 impl AllocStrategy for ExponentialAlloc {
+    fn chunk_len(&self, chunk_i: usize) -> usize {
+        Self::MULTIPLIER * Self::BASE.pow(chunk_i as u32)
+    }
 
+    fn position_for(&self, index: usize) -> ChunkPos {
+        todo!()
+    }
 }
 
 /// An arena allocator that guarantees that the addresses produced remain usable regardless of how
