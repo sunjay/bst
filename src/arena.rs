@@ -7,35 +7,64 @@ use std::marker::PhantomData;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ChunkPos {
     /// The index of the chunk to look in
-    pub chunk_index: usize,
+    pub chunk_index: u32,
     /// The index within the chunk where the item will be
     pub item_index: usize,
 }
 
 trait AllocStrategy {
     /// Returns the length of the chunk with the given index
-    fn chunk_len(&self, chunk_i: usize) -> usize;
+    fn chunk_len(&self, chunk_i: u32) -> usize;
 
     /// Returns the precise position of an item in the arena based on its index
     fn position_for(&self, index: usize) -> ChunkPos;
 }
 
+/// Allocates memory using an exponentially growing page size
 #[derive(Debug, Default)]
-struct ExponentialAlloc {}
+struct ExponentialAlloc {
+    _private: (),
+}
 
 impl ExponentialAlloc {
-    //TODO: Replace these with const generics
+    /// An extra multiplier used to scale the page size
+    //TODO: Replace this with const generics
     const MULTIPLIER: usize = 8;
-    const BASE: usize = 2;
 }
 
 impl AllocStrategy for ExponentialAlloc {
-    fn chunk_len(&self, chunk_i: usize) -> usize {
-        Self::MULTIPLIER * Self::BASE.pow(chunk_i as u32)
+    #[inline(always)]
+    fn chunk_len(&self, chunk_i: u32) -> usize {
+        // This code only works for an exponent base of 2 since we use left shift to emulate a fast
+        // `2.pow(chunk_i)` operation
+        Self::MULTIPLIER * (1usize << chunk_i)
     }
 
+    /// Converts a "global" index into the arena to its chunk position
+    #[inline(always)]
     fn position_for(&self, index: usize) -> ChunkPos {
-        todo!()
+        // This code only works for an exponent base of 2 since we use `leading_zeros` to implement
+        // a fast integer log2 operation
+
+        //TODO: This can be removed once `usize::BITS` is stabilized
+        //  https://github.com/rust-lang/rust/issues/76904
+        #[cfg(target_pointer_width = "64")]
+        const BITS: u32 = 64;
+
+        // First divide by the multipler because we multiply by it to get the chunk_len
+        let divided_index = index / Self::MULTIPLIER;
+
+        // divided_index + 1 ensures that divided_index >= 1
+        // The rest of the expression computes log2 of that value
+        // See: https://stackoverflow.com/a/11376759/551904
+        let chunk_index = BITS - (divided_index + 1).leading_zeros() - 1;
+
+        // The first "global" index in the chunk
+        let chunk_first_index = self.chunk_len(chunk_index) - Self::MULTIPLIER;
+        // The item index is the offset of this item within the chunk
+        let item_index = index - chunk_first_index;
+
+        ChunkPos {chunk_index, item_index}
     }
 }
 
@@ -256,6 +285,33 @@ mod tests {
     use super::*;
 
     use std::rc::Rc;
+
+    #[test]
+    fn exponential_strategy_indexes() {
+        /// The number of chunks to test
+        const CHUNKS: u32 = 5;
+
+        let strategy = ExponentialAlloc::default();
+
+        // The ranges of "global" indexes into the arena that each chunk should contain
+        let mut ranges = Vec::with_capacity(CHUNKS as usize);
+        let mut end = 0;
+        for chunk_i in 0..CHUNKS+1 {
+            // start at the end of the last range
+            let start = end;
+            // add the size of the current range to the end
+            end += strategy.chunk_len(chunk_i);
+            ranges.push((chunk_i, start..end));
+        }
+
+        for (expected_chunk_i, index_range) in ranges {
+            for (item_index, index) in index_range.enumerate() {
+                let pos = strategy.position_for(index);
+                assert_eq!(pos.chunk_index, expected_chunk_i);
+                assert_eq!(pos.item_index, item_index);
+            }
+        }
+    }
 
     #[test]
     fn arena_push() {
