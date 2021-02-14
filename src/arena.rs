@@ -1,4 +1,6 @@
 use std::fmt;
+use std::ptr;
+use std::slice;
 use std::ptr::NonNull;
 use std::mem::{self, MaybeUninit};
 use std::marker::PhantomData;
@@ -8,12 +10,23 @@ use std::marker::PhantomData;
 struct ChunkPos {
     /// The index of the chunk to look in
     pub chunk_index: u32,
+
     /// The index within the chunk where the item will be
+    ///
+    /// This must be less than the size of the chunk corresponding to `chunk_index`
     pub item_index: usize,
 }
 
-trait AllocStrategy {
+/// Trait for defining how chunks are allocated and items are mapped within them
+///
+/// # Safety
+///
+/// Implementations must ensure that indexes returned are never out-of-bounds as long as the input
+/// index is not out-of-bounds. Sizes returned must be non-zero.
+unsafe trait AllocStrategy {
     /// Returns the length of the chunk with the given index
+    ///
+    /// The chunk length must be greater than zero
     fn chunk_len(&self, chunk_i: u32) -> usize;
 
     /// Returns the precise position of an item in the arena based on its index
@@ -32,7 +45,7 @@ impl ExponentialAlloc {
     const MULTIPLIER: usize = 8;
 }
 
-impl AllocStrategy for ExponentialAlloc {
+unsafe impl AllocStrategy for ExponentialAlloc {
     #[inline(always)]
     fn chunk_len(&self, chunk_i: u32) -> usize {
         // This code only works for an exponent base of 2 since we use left shift to emulate a fast
@@ -87,6 +100,9 @@ pub struct StableArena<T> {
     /// All entries with index < len are guaranteed to be initialized in chunks
     len: usize,
 
+    /// The maximum number of entries that can be pushed into the arena without allocating
+    capacity: usize,
+
     /// This controls how chunks are allocated
     ///
     /// The arena could be generic over `AllocStrategy` but that isn't needed right now.
@@ -106,6 +122,7 @@ impl<T> Default for StableArena<T> {
         Self {
             chunks: Vec::default(),
             len: 0,
+            capacity: 0,
             strategy: ExponentialAlloc::default(),
             _marker: PhantomData,
         }
@@ -144,7 +161,13 @@ impl<T> StableArena<T> {
     /// The arena will be able to hold at least `capacity` elements without reallocating. If
     /// `capacity` is 0, the arena will not allocate.
     pub fn with_capacity(capacity: usize) -> Self {
-        todo!()
+        let mut arena = Self::new();
+
+        while arena.capacity() < capacity {
+            arena.push_chunk();
+        }
+
+        arena
     }
 
     /// Returns the number of entries in the arena that contain a value
@@ -162,7 +185,7 @@ impl<T> StableArena<T> {
     /// This number is a lower bound; the arena might be able to hold more, but is guaranteed to be
     /// able to hold at least this many.
     pub fn capacity(&self) -> usize {
-        todo!()
+        self.capacity
     }
 
     /// Allocates the given value in the arena and returns a stable address to the value
@@ -170,7 +193,29 @@ impl<T> StableArena<T> {
     /// The returned pointer is guaranteed to be valid as long as no method is called that would
     /// invalidate the pointer (e.g. the `clear` method).
     pub fn alloc(&mut self, value: T) -> NonNull<T> {
-        todo!()
+        debug_assert!(self.len <= self.capacity);
+        // The length can never exceed the capacity
+        if self.len == self.capacity {
+            // Should only have to push once to get enough capacity for this new value
+            self.push_chunk();
+        }
+        debug_assert!(self.len < self.capacity);
+
+        let index = self.len();
+
+        let ChunkPos {chunk_index, item_index} = self.strategy.position_for(index);
+        debug_assert!((chunk_index as usize) < self.chunks.len());
+        // Safety: Given that we have definitely reserved enough space for this item above, the
+        // chunk index returned for it should be within the array of chunks
+        let chunk = unsafe { self.chunks.get_unchecked_mut(chunk_index as usize) };
+        // Safety: Item index is guaranteed to be a valid index into the chunk
+        let mut item_ptr = unsafe { NonNull::new_unchecked(chunk.as_ptr().add(item_index)) };
+        unsafe { item_ptr.as_mut().as_mut_ptr().write(value); }
+
+        self.len += 1;
+
+        // Safety: `MaybeUninit<T>` is guaranteed to have the same size, alignment, and ABI as T
+        unsafe { mem::transmute(item_ptr) }
     }
 
     /// Returns an iterator over the arena
@@ -189,7 +234,49 @@ impl<T> StableArena<T> {
     ///
     /// This invalidates all previous addresses returned from `alloc`.
     pub fn clear(&mut self) {
-        todo!()
+        // If the items do not need to be dropped or if the collection is empty, we can just reset
+        // the length and exit.
+        if !mem::needs_drop::<T>() || self.is_empty() {
+            self.len = 0;
+
+            return;
+        }
+
+        // Go through and drop every chunk
+        let mut dropped = 0;
+        'droploop:
+        for (chunk_i, chunk) in (0..).zip(&mut self.chunks) {
+            let chunk_len = self.strategy.chunk_len(chunk_i);
+            // Safety: each chunk is initialized from a valid slice of memory of its chunk length
+            let chunk = unsafe {
+                slice::from_raw_parts_mut(chunk.as_mut(), chunk_len)
+            };
+
+            for item_index in 0..chunk_len {
+                // Stop once we've dropped every element
+                if dropped == self.len {
+                    // Need to at least break this inner loop, but breaking the outer loop too just
+                    // because it doesn't need to run anymore. Usually, we will be at the last chunk
+                    // anyway when `dropped == self.len`, but we can still have chunks leftover if
+                    // removing elements becomes supported later. No unsafety can happen if further
+                    // *chunks* are iterated through. This is just an optimization.
+                    break 'droploop;
+                }
+
+                //TODO: This can be replaced with `assume_init_drop` once that is stable
+                //  See: https://doc.rust-lang.org/std/mem/union.MaybeUninit.html#method.assume_init_drop
+                // Safety: All elements at index < self.len are guaranteed to be initalized
+                //   The value will never be used after this since we are clearing the arena.
+                unsafe { ptr::drop_in_place(chunk[item_index].as_mut_ptr()) };
+
+                dropped += 1;
+            }
+        }
+
+        debug_assert_eq!(dropped, self.len);
+
+        // All items have been dropped, so reset the length
+        self.len = 0;
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted in the arena.
@@ -219,6 +306,33 @@ impl<T> StableArena<T> {
     pub unsafe fn set_len(&mut self, len: usize) {
         self.len = len;
     }
+
+    fn push_chunk(&mut self) {
+        // The next chunk index is the number of chunks we currently have
+        let chunk_i = self.chunks.len() as u32;
+        let chunk_len = self.strategy.chunk_len(chunk_i);
+
+        //TODO: Replace this with `Box::new_uninit_slice` when that is stable
+        //  See: https://github.com/rust-lang/rust/issues/63291
+        // To avoid initializing the memory, we just use `Vec::with_capacity`. This is safe because
+        // `MaybeUninit` doesn't need to be initialized.
+        let mut chunk: Vec<MaybeUninit<T>> = Vec::with_capacity(chunk_len);
+        //TODO: This is used to make removing chunks safe without tracking the capacity explicitly.
+        //  It will become unnecessary once we have `Box::new_uninit_slice`. If this assertion ever
+        //  fails we will need to change how we drop chunks.
+        assert_eq!(chunk.capacity(), chunk_len);
+
+        // Store a pointer to the chunk and then forget it so that it doesn't get dropped
+        let chunk_ptr = chunk.as_mut_ptr();
+        mem::forget(chunk);
+
+        // Safety: The `Vec` must allocate *some* capacity as long as the chunk length is greater
+        //   than 0. As long as there is some capacity, this pointer will be non-null.
+        let chunk_ptr = unsafe { NonNull::new_unchecked(chunk_ptr) };
+
+        self.chunks.push(chunk_ptr);
+        self.capacity += chunk_len;
+    }
 }
 
 impl<T> IntoIterator for StableArena<T> {
@@ -235,12 +349,18 @@ impl<T> IntoIterator for StableArena<T> {
 // See: https://forge.rust-lang.org/libs/maintaining-std.html#is-there-a-manual-drop-implementation
 impl<T> Drop for StableArena<T> {
     fn drop(&mut self) {
-        // Fast path: ignore if `T` does not need to be dropped
-        if !mem::needs_drop::<T>() {
-            return;
-        }
-
+        // Drop all elements that need to be dropped
         self.clear();
+
+        // Free each allocated chunk
+        for (chunk_i, chunk) in (0..).zip(&mut self.chunks) {
+            let chunk_len = self.strategy.chunk_len(chunk_i);
+            // Safety: This process needs to deallocate the exact type the chunk was initially
+            // created from in `push_chunk`.
+            // Safety: We assert in `push_chunk` that size == capacity
+            // Drop the `Vec` right after creating it
+            unsafe { Vec::from_raw_parts(chunk.as_mut(), chunk_len, chunk_len); }
+        }
     }
 }
 
@@ -314,17 +434,29 @@ mod tests {
     }
 
     #[test]
+    fn drop_empty_arena() {
+        // Using Vec because it implements Drop
+        let _empty: StableArena<Vec<i32>> = StableArena::default();
+
+        let _empty2: StableArena<Vec<i32>> = StableArena::with_capacity(1000);
+    }
+
+    #[test]
     fn arena_push() {
         // Addresses yielded by the arena should remain valid regardless of how many times we push
 
         // This test is O(n^2), so be careful with this number
+        #[cfg(not(miri))]
         const ALLOCS: usize = 1024;
+        #[cfg(miri)]
+        const ALLOCS: usize = 32;
 
         let mut addrs = Vec::with_capacity(ALLOCS);
 
         // The arena allocator will resize multiple times during this test
         let mut arena = StableArena::new();
         for i in 0..ALLOCS {
+            // Pushing a type that implements drop
             addrs.push(arena.alloc(Rc::new(i)));
 
             // Check that all addresses are still valid
