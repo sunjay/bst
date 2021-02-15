@@ -671,6 +671,8 @@ mod tests {
 
     use std::rc::Rc;
 
+    use rand::prelude::*;
+
     #[test]
     fn exponential_strategy_indexes() {
         /// The number of chunks to test
@@ -792,5 +794,118 @@ mod tests {
         // assert!(arena.is_empty());
         // arena.shrink_to_fit();
         // assert!(arena.capacity() >= arena.len());
+    }
+
+    #[test]
+    fn test_random_operations() {
+        cfg_if::cfg_if! {
+            if #[cfg(miri)] {
+                const TEST_CASES: usize = 8;
+                const OPERATIONS: usize = 256;
+
+                (0..TEST_CASES).into_iter().for_each(|_| test_case());
+
+            } else {
+                use rayon::prelude::*;
+
+                const TEST_CASES: usize = 256;
+                const OPERATIONS: usize = 1024;
+
+                (0..TEST_CASES).into_par_iter().for_each(|_| test_case());
+            }
+        }
+
+        fn test_case() {
+            let mut arena: StableArena<Rc<i32>> = StableArena::new();
+            // Compare against a Vec
+            let mut expected: Vec<Rc<i32>> = Vec::new();
+            // The list of pointers/indexes from all insertions
+            let mut ptrs = Vec::new();
+
+            let seed = thread_rng().gen();
+            println!("Seed: {:?}", seed);
+            let mut rng = StdRng::seed_from_u64(seed);
+
+            let mut cleared = false;
+            let ops = rng.gen_range(OPERATIONS..=OPERATIONS*2);
+            for i in 0..ops {
+                // Clear both containers once after the halfway point
+                if !cleared && i == rng.gen_range(ops/2..ops) {
+                    let capacity = arena.capacity();
+
+                    arena.clear();
+                    expected.clear();
+                    ptrs.clear();
+
+                    // Clearing should not affect the capacity
+                    assert_eq!(arena.capacity(), capacity);
+
+                    cleared = true;
+                }
+
+                assert_eq!(arena.is_empty(), expected.is_empty());
+                assert_eq!(arena.len(), expected.len());
+
+                // Make sure all the values inserted so far are still available
+                for (ptr, expected_value) in ptrs.iter().copied().zip(&expected) {
+                    let value = unsafe { arena.get_unchecked(ptr) };
+                    assert_eq!(value, expected_value);
+                }
+
+                match rng.gen_range(1..=100) {
+                    // Allocate/push a value
+                    1..=60 => {
+                        let value = Rc::new(rng.gen_range(0..=100000));
+                        let ptr = arena.alloc(value.clone());
+                        expected.push(value.clone());
+
+                        ptrs.push(ptr);
+
+                        assert_eq!(*unsafe { arena.get_unchecked(ptr) }, value);
+                        assert_eq!(*expected.last().unwrap(), value);
+
+                        // Must have a capacity greater than zero given that we just inserted something
+                        assert!(arena.capacity() > 0);
+                        assert!(expected.capacity() > 0);
+                    },
+
+                    // Modify an existing value
+                    61..=90 => {
+                        if ptrs.is_empty() {
+                            continue;
+                        }
+
+                        let index = rng.gen_range(0..ptrs.len());
+                        let ptr = ptrs[index];
+
+                        unsafe {
+                            assert_eq!(arena.get_unchecked(ptr), expected.get_unchecked(index));
+
+                            let new_value = Rc::new(-rng.gen_range(0..=200000));
+
+                            *arena.get_unchecked_mut(ptr) = new_value.clone();
+                            *expected.get_unchecked_mut(index) = new_value;
+
+                            assert_eq!(arena.get_unchecked(ptr), expected.get_unchecked(index));
+                        }
+                    },
+
+                    // Reserve some extra space
+                    91..=95 => {
+                        let additional = rng.gen_range(1..=25);
+                        arena.reserve(additional);
+                        expected.reserve(additional);
+                    },
+
+                    // Shrink the capacity
+                    96..=100 => {
+                        arena.shrink_to_fit();
+                        expected.shrink_to_fit();
+                    },
+
+                    _ => unreachable!(),
+                }
+            }
+        }
     }
 }
