@@ -1,5 +1,7 @@
 use std::fmt;
 use std::slice;
+use std::ops::Range;
+use std::iter::FusedIterator;
 use std::ptr::{self, NonNull};
 use std::mem::{self, MaybeUninit};
 use std::marker::PhantomData;
@@ -242,7 +244,7 @@ impl<T> StableArena<T> {
         // Safety: Given that we have definitely reserved enough space for this item above, the
         // chunk index returned for it should be within the array of chunks
         let chunk = unsafe { self.chunks.get_unchecked_mut(chunk_index as usize) };
-        // Safety: Item index is guaranteed to be a valid index into the chunk
+        // Safety: item index is guaranteed to be a valid index into the chunk
         let mut item_ptr = unsafe { NonNull::new_unchecked(chunk.as_ptr().add(item_index)) };
         unsafe { item_ptr.as_mut().as_mut_ptr().write(value); }
 
@@ -254,12 +256,12 @@ impl<T> StableArena<T> {
 
     /// Returns an iterator over the arena
     pub fn iter(&self) -> Iter<T> {
-        todo!()
+        Iter::new(self)
     }
 
     /// Returns an iterator over the arena that allows you to modify each value
     pub fn iter_mut(&mut self) -> IterMut<T> {
-        todo!()
+        IterMut::new(self)
     }
 
     /// Clears the arena, removing all values.
@@ -457,10 +459,25 @@ pub struct IntoIter<T> {
 impl<T> Iterator for IntoIter<T> {
     type Item = T;
 
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        //TODO
+        (0, None)
+    }
+
     fn next(&mut self) -> Option<Self::Item> {
         self.next_ptr().map(|(_, item)| item)
     }
 }
+
+impl<T> DoubleEndedIterator for IntoIter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.next_back_ptr().map(|(_, item)| item)
+    }
+}
+
+impl<T> ExactSizeIterator for IntoIter<T> {}
+
+impl<T> FusedIterator for IntoIter<T> {}
 
 impl<T> ArenaIterator for IntoIter<T> {
     fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
@@ -468,38 +485,134 @@ impl<T> ArenaIterator for IntoIter<T> {
     }
 }
 
+impl<T> ArenaDoubleEndedIterator for IntoIter<T> {
+    fn next_back_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
+        todo!()
+    }
+}
+
 pub struct Iter<'a, T> {
-    _marker: PhantomData<&'a T>, //TODO
+    arena: &'a StableArena<T>,
+    range: Range<usize>,
+}
+
+impl<'a, T> Iter<'a, T> {
+    fn new(arena: &'a StableArena<T>) -> Self {
+        Self {
+            arena,
+            range: 0..arena.len(),
+        }
+    }
 }
 
 impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.range.size_hint()
+    }
+
     fn next(&mut self) -> Option<Self::Item> {
         self.next_ptr().map(|(_, item)| item)
     }
 }
 
+impl<'a, T> DoubleEndedIterator for Iter<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.next_back_ptr().map(|(_, item)| item)
+    }
+}
+
+impl<'a, T> ExactSizeIterator for Iter<'a, T> { }
+
+impl<'a, T> FusedIterator for Iter<'a, T> {}
+
 impl<'a, T> ArenaIterator for Iter<'a, T> {
     fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
+        let index = self.range.next()?;
+
+        let ChunkPos {chunk_index, item_index} = self.arena.strategy.position_for(index);
+        debug_assert!((chunk_index as usize) < self.arena.chunks.len());
+        // Safety: Since the index is between 0 and len(), the chunk index returned for it should be
+        // within the array of chunks
+        let chunk = unsafe { self.arena.chunks.get_unchecked(chunk_index as usize) };
+        // Safety: item index is guaranteed to be a valid index into the chunk
+        let item_ptr = unsafe { NonNull::new_unchecked(chunk.as_ptr().add(item_index)) };
+        // Safety: `MaybeUninit<T>` is guaranteed to have the same size, alignment, and ABI as T
+        let item_ptr: NonNull<T> = unsafe { mem::transmute(item_ptr) };
+
+        let ptr = Ptr(item_ptr.cast());
+        let value = unsafe { &*item_ptr.as_ptr() };
+
+        Some((ptr, value))
+    }
+}
+
+impl<'a, T> ArenaDoubleEndedIterator for Iter<'a, T> {
+    fn next_back_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
         todo!()
     }
 }
 
 pub struct IterMut<'a, T> {
-    _marker: PhantomData<&'a mut T>, //TODO
+    arena: &'a mut StableArena<T>,
+    range: Range<usize>,
+}
+
+impl<'a, T> IterMut<'a, T> {
+    fn new(arena: &'a mut StableArena<T>) -> Self {
+        Self {
+            range: 0..arena.len(),
+            arena,
+        }
+    }
 }
 
 impl<'a, T> Iterator for IterMut<'a, T> {
     type Item = &'a mut T;
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.range.size_hint()
+    }
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_ptr().map(|(_, item)| item)
     }
 }
 
+impl<'a, T> DoubleEndedIterator for IterMut<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.next_back_ptr().map(|(_, item)| item)
+    }
+}
+
+impl<'a, T> ExactSizeIterator for IterMut<'a, T> { }
+
+impl<'a, T> FusedIterator for IterMut<'a, T> {}
+
 impl<'a, T> ArenaIterator for IterMut<'a, T> {
     fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
+        let index = self.range.next()?;
+
+        let ChunkPos {chunk_index, item_index} = self.arena.strategy.position_for(index);
+        debug_assert!((chunk_index as usize) < self.arena.chunks.len());
+        // Safety: Since the index is between 0 and len(), the chunk index returned for it should be
+        // within the array of chunks
+        let chunk = unsafe { self.arena.chunks.get_unchecked(chunk_index as usize) };
+        // Safety: item index is guaranteed to be a valid index into the chunk
+        let item_ptr = unsafe { NonNull::new_unchecked(chunk.as_ptr().add(item_index)) };
+        // Safety: `MaybeUninit<T>` is guaranteed to have the same size, alignment, and ABI as T
+        let item_ptr: NonNull<T> = unsafe { mem::transmute(item_ptr) };
+
+        let ptr = Ptr(item_ptr.cast());
+        let value = unsafe { &mut *item_ptr.as_ptr() };
+
+        Some((ptr, value))
+    }
+}
+
+impl<'a, T> ArenaDoubleEndedIterator for IterMut<'a, T> {
+    fn next_back_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
         todo!()
     }
 }
@@ -514,6 +627,11 @@ pub trait ArenaIterator: Sized + Iterator {
     }
 }
 
+pub trait ArenaDoubleEndedIterator: ArenaIterator {
+    /// Returns the next element from the end of this iterator and its corresponding pointer
+    fn next_back_ptr(&mut self) -> Option<(Ptr, Self::Item)>;
+}
+
 pub struct Pointers<I: ArenaIterator> {
     iter: I,
 }
@@ -523,6 +641,12 @@ impl<I: ArenaIterator> Iterator for Pointers<I> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next_ptr()
+    }
+}
+
+impl<I: ArenaDoubleEndedIterator> DoubleEndedIterator for Pointers<I> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back_ptr()
     }
 }
 

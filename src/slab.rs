@@ -435,7 +435,7 @@ mod tests {
         // change the capacity again
         assert!(slab.len() < slab.capacity());
         slab.shrink_to_fit();
-        assert_eq!(slab.len(), slab.capacity());
+        assert!(slab.len() <= slab.capacity());
 
         // check that the values are still the same
         assert_eq!(unsafe { *slab.get_unchecked(ptr0) }, -12);
