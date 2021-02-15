@@ -23,7 +23,6 @@ use std::iter::FromIterator;
 ///
 /// The tree is not guaranteed to be structured or balanced in any particular way. The
 /// implementation may structure the tree however is needed to fulfill the BST properties.
-#[derive(Clone)]
 pub struct BSTSet<T> {
     items: crate::map::BSTMap<T, ()>,
 }
@@ -43,6 +42,14 @@ impl<T> fmt::Debug for BSTSet<T>
         f.debug_struct("BSTSet")
             .field("root", &self.root())
             .finish()
+    }
+}
+
+impl<T: Ord + Clone> Clone for BSTSet<T> {
+    fn clone(&self) -> Self {
+        Self {
+            items: self.items.clone(),
+        }
     }
 }
 

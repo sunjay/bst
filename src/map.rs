@@ -18,7 +18,6 @@ use static_assertions::const_assert_eq;
 
 use crate::slab::{UnsafeSlab, Ptr};
 
-#[derive(Clone)]
 struct InnerNode<K, V> {
     key: K,
     value: V,
@@ -77,37 +76,23 @@ impl<K, V> fmt::Debug for BSTMap<K, V>
     }
 }
 
-//TODO: This can be specialized to a single memcpy if K: Copy and V: Copy
-impl<K: Clone, V: Clone> Clone for BSTMap<K, V> {
+impl<K: Ord + Clone, V: Clone> Clone for BSTMap<K, V> {
     fn clone(&self) -> Self {
-        use std::mem::{self, MaybeUninit};
-
-        let mut nodes = self.nodes.clone_uninit();
+        let mut cloned = Self::with_capacity(self.len());
 
         // For a balanced tree, this will use O(log n) space.
         let mut stack = Vec::new();
-        stack.extend(self.root);
+        stack.extend(self.root());
 
         // Walk tree and initialize nodes
-        while let Some(ptr) = stack.pop() {
-            // Safety: any pointers added to the stack are valid in `self.nodes`
-            let node = unsafe { self.nodes.get_unchecked(ptr) };
-            stack.extend(node.right);
-            stack.extend(node.left);
+        while let Some(node) = stack.pop() {
+            cloned.insert(node.key().clone(), node.value().clone());
 
-            let new_entry = MaybeUninit::new(node.clone());
-            // Safety: initializing the same pointer in the new set of nodes as was used in the old
-            // set of nodes, so it should be valid. Furthermore, `MaybeUninit` does not need to be
-            // initialized, so `&mut MaybeUninit` does not cause UB, even though the memory has not
-            // been initialized yet.
-            unsafe { *nodes.get_unchecked_mut(ptr) = new_entry; }
+            stack.extend(node.right());
+            stack.extend(node.left());
         }
 
-        Self {
-            // Safety: All entries that previously contained a value have now been initialized
-            nodes: unsafe { mem::transmute(nodes) },
-            root: self.root,
-        }
+        cloned
     }
 }
 
