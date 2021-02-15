@@ -285,14 +285,46 @@ impl<T> StableArena<T> {
     /// reserve, capacity will be greater than or equal to `self.len() + additional`. Does nothing
     /// if capacity is already sufficient.
     pub fn reserve(&mut self, additional: usize) {
-        todo!()
+        let capacity = self.len() + additional;
+
+        while self.capacity() < capacity {
+            self.push_chunk();
+        }
     }
 
     /// Shrinks the capacity of the arena as much as possible.
     ///
     /// It will drop down as close as possible to the length but may still be greater.
     pub fn shrink_to_fit(&mut self) {
-        todo!()
+        let mut chunks_len = self.chunks.len();
+        while let Some(chunk) = self.chunks.last_mut() {
+            let chunk_i = (chunks_len - 1) as u32;
+            let chunk_len = self.strategy.chunk_len(chunk_i);
+
+            // We can only remove chunks that are completely empty
+            if self.capacity - chunk_len >= self.len {
+                // No need to drop any items in the chunk since it is empty
+
+                // Free the chunk allocation
+                // Safety: This process needs to deallocate the exact type the chunk was initially
+                // created from in `push_chunk`.
+                // Safety: We assert in `push_chunk` that size == capacity
+                // Drop the `Vec` right after creating it
+                unsafe { Vec::from_raw_parts(chunk.as_mut(), chunk_len, chunk_len); }
+
+                self.chunks.pop();
+                chunks_len -= 1;
+
+                self.capacity -= chunk_len;
+
+            } else {
+                // We've reached the last non-empty chunk and can no longer remove anything else
+                break;
+            }
+        }
+
+        // Shrink the capacity of the chunks
+        self.chunks.shrink_to_fit();
     }
 
     /// Forces the length of the arena to the given value.
@@ -466,5 +498,68 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn arena_capacity() {
+        // Capacity must start at zero (do not allocate until needed)
+        let arena: StableArena<i32> = StableArena::new();
+        assert_eq!(arena.capacity(), 0);
+
+        let mut arena: StableArena<String> = StableArena::with_capacity(10);
+        assert!(arena.capacity() >= 10);
+        let capacity = arena.capacity();
+
+        // reserve zero slots
+        arena.reserve(0);
+        // capacity should not change
+        assert_eq!(arena.capacity(), capacity);
+
+        // reserve space for at least 10 slots
+        arena.reserve(10);
+        assert!(arena.capacity() >= arena.len() + 10);
+        let capacity = arena.capacity();
+
+        // push should not change capacity if capacity is greater than length
+        assert!(arena.capacity() > arena.len());
+
+        let mut addrs = Vec::new();
+        for i in 0.. {
+            addrs.push(arena.alloc(i.to_string()));
+
+            if arena.capacity() <= arena.len() {
+                break;
+            }
+        }
+
+        // capacity should still be the same
+        assert_eq!(arena.capacity(), capacity);
+
+        // shrink to fit should not affect items
+        arena.shrink_to_fit();
+        let capacity = arena.capacity();
+        for (i, addr) in addrs.iter().copied().enumerate() {
+            assert_eq!(unsafe { addr.as_ref() }, &i.to_string());
+            assert_eq!(arena.capacity(), capacity);
+        }
+
+        // reserving a bunch of space and then shrinking it down again should reclaim that space
+        arena.reserve(arena.len() * 3);
+        assert_ne!(arena.capacity(), capacity);
+        arena.shrink_to_fit();
+        assert_eq!(arena.capacity(), capacity);
+
+        //TODO: Add back once we have `pop()`
+        // pop should not change capacity
+        // for index in indexes {
+        //     arena.pop();
+        //     assert_eq!(slab.capacity(), capacity);
+        // }
+
+        //TODO: Add back once we have `pop()`
+        // shrink_to_fit should bring capacity back down as close to zero as possible
+        // assert!(arena.is_empty());
+        // arena.shrink_to_fit();
+        // assert!(arena.capacity() >= arena.len());
     }
 }

@@ -289,7 +289,7 @@ impl<T> UnsafeSlab<T> {
         });
 
         //TODO: If removing from the end of the slab, we may be able to call `set_len` instead of
-        //      using the free list
+        //      using the free list (without this `shrink_to_fit` never does anything)
         self.free_list_head = Ptr::new_unchecked(index);
         self.free_len += 1;
 
@@ -706,6 +706,12 @@ mod tests {
             assert_eq!(unsafe { slab.get_unchecked(index) }, &i.to_string());
             assert_eq!(slab.capacity(), capacity);
         }
+
+        // reserving a bunch of space and then shrinking it down again should reclaim that space
+        slab.reserve(slab.len() * 3);
+        assert_ne!(slab.capacity(), capacity);
+        slab.shrink_to_fit();
+        assert_eq!(slab.capacity(), capacity);
 
         // remove should not change capacity
         for index in indexes {
