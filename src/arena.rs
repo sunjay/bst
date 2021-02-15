@@ -401,6 +401,23 @@ impl<T> StableArena<T> {
         self.chunks.push(chunk_ptr);
         self.capacity += chunk_len;
     }
+
+    /// Returns the pointer corresponding to the given index
+    ///
+    /// # Safety
+    ///
+    /// The index must not be out of bounds
+    unsafe fn ptr_at(&self, index: usize) -> Ptr {
+        let ChunkPos {chunk_index, item_index} = self.strategy.position_for(index);
+        debug_assert!((chunk_index as usize) < self.chunks.len());
+        // Safety: Since the index is in bounds, the chunk index returned for it should be within
+        // the array of chunks
+        let chunk = self.chunks.get_unchecked(chunk_index as usize);
+        // Safety: item index is guaranteed to be a valid index into the chunk
+        let item_ptr = NonNull::new_unchecked(chunk.as_ptr().add(item_index));
+
+        Ptr(item_ptr.cast())
+    }
 }
 
 //TODO: This needs a `#[may_dangle]` attribute on `T`
@@ -531,26 +548,25 @@ impl<'a, T> ArenaIterator for Iter<'a, T> {
     fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
         let index = self.range.next()?;
 
-        let ChunkPos {chunk_index, item_index} = self.arena.strategy.position_for(index);
-        debug_assert!((chunk_index as usize) < self.arena.chunks.len());
-        // Safety: Since the index is between 0 and len(), the chunk index returned for it should be
-        // within the array of chunks
-        let chunk = unsafe { self.arena.chunks.get_unchecked(chunk_index as usize) };
-        // Safety: item index is guaranteed to be a valid index into the chunk
-        let item_ptr = unsafe { NonNull::new_unchecked(chunk.as_ptr().add(item_index)) };
-        // Safety: `MaybeUninit<T>` is guaranteed to have the same size, alignment, and ABI as T
-        let item_ptr: NonNull<T> = unsafe { mem::transmute(item_ptr) };
+        // Safety: The index is guaranteed to be between 0 and len()
+        let ptr = unsafe { self.arena.ptr_at(index) };
+        // Safety: The pointer is valid since we just computed it from a valid index
+        let item = unsafe { self.arena.get_unchecked(ptr) };
 
-        let ptr = Ptr(item_ptr.cast());
-        let value = unsafe { &*item_ptr.as_ptr() };
-
-        Some((ptr, value))
+        Some((ptr, item))
     }
 }
 
 impl<'a, T> ArenaDoubleEndedIterator for Iter<'a, T> {
     fn next_back_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
-        todo!()
+        let index = self.range.next_back()?;
+
+        // Safety: The index is guaranteed to be between 0 and len()
+        let ptr = unsafe { self.arena.ptr_at(index) };
+        // Safety: The pointer is valid since we just computed it from a valid index
+        let item = unsafe { self.arena.get_unchecked(ptr) };
+
+        Some((ptr, item))
     }
 }
 
@@ -594,26 +610,25 @@ impl<'a, T> ArenaIterator for IterMut<'a, T> {
     fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
         let index = self.range.next()?;
 
-        let ChunkPos {chunk_index, item_index} = self.arena.strategy.position_for(index);
-        debug_assert!((chunk_index as usize) < self.arena.chunks.len());
-        // Safety: Since the index is between 0 and len(), the chunk index returned for it should be
-        // within the array of chunks
-        let chunk = unsafe { self.arena.chunks.get_unchecked(chunk_index as usize) };
-        // Safety: item index is guaranteed to be a valid index into the chunk
-        let item_ptr = unsafe { NonNull::new_unchecked(chunk.as_ptr().add(item_index)) };
-        // Safety: `MaybeUninit<T>` is guaranteed to have the same size, alignment, and ABI as T
-        let item_ptr: NonNull<T> = unsafe { mem::transmute(item_ptr) };
+        // Safety: The index is guaranteed to be between 0 and len()
+        let ptr = unsafe { self.arena.ptr_at(index) };
+        // Safety: The pointer is valid since we just computed it from a valid index
+        let item = unsafe { &mut *ptr.0.cast().as_ptr() };
 
-        let ptr = Ptr(item_ptr.cast());
-        let value = unsafe { &mut *item_ptr.as_ptr() };
-
-        Some((ptr, value))
+        Some((ptr, item))
     }
 }
 
 impl<'a, T> ArenaDoubleEndedIterator for IterMut<'a, T> {
     fn next_back_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
-        todo!()
+        let index = self.range.next_back()?;
+
+        // Safety: The index is guaranteed to be between 0 and len()
+        let ptr = unsafe { self.arena.ptr_at(index) };
+        // Safety: The pointer is valid since we just computed it from a valid index
+        let item = unsafe { &mut *ptr.0.cast().as_ptr() };
+
+        Some((ptr, item))
     }
 }
 
