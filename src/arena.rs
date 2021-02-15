@@ -908,4 +908,55 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_eq() {
+        let mut arena1 = StableArena::new();
+
+        for i in 0..10 {
+            arena1.alloc(i);
+        }
+
+        // Reflexivity
+        assert_eq!(arena1, arena1);
+
+        let mut arena2 = StableArena::new();
+
+        for i in 0..10 {
+            arena2.alloc(i);
+        }
+
+        // Reflexivity
+        assert_eq!(arena2, arena2);
+        // Symmetry
+        assert_eq!(arena1, arena2);
+        assert_eq!(arena2, arena1);
+
+        let mut arena3 = StableArena::new();
+
+        for i in 10..20 {
+            arena3.alloc(i);
+        }
+
+        // Reflexivity
+        assert_eq!(arena3, arena3);
+        // Completely different arenas, same lengths
+        assert_eq!(arena1.len(), arena3.len());
+        assert_ne!(arena1, arena3);
+        assert_ne!(arena2, arena3);
+
+        let arena4 = StableArena::new();
+
+        // Reflexivity
+        assert_eq!(arena4, arena4);
+        // Completely different arenas, different lengths
+        assert_ne!(arena1.len(), arena4.len());
+        assert_ne!(arena1, arena4);
+        assert_ne!(arena2, arena4);
+        assert_ne!(arena3, arena4);
+
+        // Empty arenas should be equal
+        assert!(arena4.is_empty());
+        assert_eq!(arena4, StableArena::default());
+    }
 }
