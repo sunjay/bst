@@ -288,7 +288,7 @@ impl<T> StableArena<T> {
                 slice::from_raw_parts_mut(chunk.as_mut(), chunk_len)
             };
 
-            for item_index in 0..chunk_len {
+            for item in chunk {
                 // Stop once we've dropped every element
                 if dropped == self.len {
                     // Need to at least break this inner loop, but breaking the outer loop too just
@@ -303,7 +303,7 @@ impl<T> StableArena<T> {
                 //  See: https://doc.rust-lang.org/std/mem/union.MaybeUninit.html#method.assume_init_drop
                 // Safety: All elements at index < self.len are guaranteed to be initalized
                 //   The value will never be used after this since we are clearing the arena.
-                unsafe { ptr::drop_in_place(chunk[item_index].as_mut_ptr()) };
+                unsafe { ptr::drop_in_place(item.as_mut_ptr()) };
 
                 dropped += 1;
             }

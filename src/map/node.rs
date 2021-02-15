@@ -73,12 +73,12 @@ impl<'a, K, V> Node<'a, K, V> {
 
     /// Returns true if this node has a left subtree
     pub fn has_left(&self) -> bool {
-        !self.node().left.is_none()
+        self.node().left.is_some()
     }
 
     /// Returns true if this node has a right subtree
     pub fn has_right(&self) -> bool {
-        !self.node().right.is_none()
+        self.node().right.is_some()
     }
 
     /// Returns the left child node (subtree) of this node, if any
@@ -174,12 +174,12 @@ impl<'a, K, V> NodeMut<'a, K, V> {
 
     /// Returns true if this node has a left subtree
     pub fn has_left(&self) -> bool {
-        !self.node().left.is_none()
+        self.node().left.is_some()
     }
 
     /// Returns true if this node has a right subtree
     pub fn has_right(&self) -> bool {
-        !self.node().right.is_none()
+        self.node().right.is_some()
     }
 
     /// Returns the left child node (subtree) of this node, if any
