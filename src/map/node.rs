@@ -4,15 +4,15 @@ use std::fmt;
 
 use crate::slab::{Ptr, UnsafeSlab};
 
-use super::{InnerNode, push_node};
+use super::InnerNode;
 
 /// A single node of the binary search tree
 pub struct Node<'a, K, V> {
     nodes: &'a UnsafeSlab<InnerNode<K, V>>,
-    /// An index into `nodes` for the node represented by this struct
+    /// A pointer into `nodes` for the node represented by this struct
     ///
-    /// Guaranteed to be a valid index
-    index: usize,
+    /// Guaranteed to be a valid pointer
+    ptr: Ptr,
 }
 
 impl<'a, K, V> fmt::Debug for Node<'a, K, V>
@@ -42,9 +42,9 @@ impl<'a, K: PartialEq, V: PartialEq> PartialEq for Node<'a, K, V> {
         // are different, the `self.left() == other.left()` and `self.right() == other.right()` will
         // be false.
 
-        // If the indexes are the same, the values are guaranteed to be equal (similar to `Arc`
+        // If the pointers are the same, the values are guaranteed to be equal (similar to `Arc`
         // using `ptr_eq` to optimize its `PartialEq` impl)
-        let ptr_eq = ptr::eq(self.nodes, other.nodes) && self.index == other.index;
+        let ptr_eq = ptr::eq(self.nodes, other.nodes) && self.ptr == other.ptr;
         ptr_eq || (self.key().eq(other.key()) && self.value().eq(other.value()))
     }
 }
@@ -56,9 +56,9 @@ impl<'a, K, V> Node<'a, K, V> {
     ///
     /// # Safety
     ///
-    /// Must guarantee that `index` represents a valid index into `nodes`.
-    pub(super) unsafe fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, index: Ptr) -> Option<Self> {
-        index.into_index().map(|index| Self {nodes, index})
+    /// Must guarantee that `ptr` represents a valid pointer into `nodes`.
+    pub(super) unsafe fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, ptr: Ptr) -> Self {
+        Self {nodes, ptr}
     }
 
     /// Returns the key of this node
@@ -73,29 +73,29 @@ impl<'a, K, V> Node<'a, K, V> {
 
     /// Returns true if this node has a left subtree
     pub fn has_left(&self) -> bool {
-        !self.node().left.is_null()
+        !self.node().left.is_none()
     }
 
     /// Returns true if this node has a right subtree
     pub fn has_right(&self) -> bool {
-        !self.node().right.is_null()
+        !self.node().right.is_none()
     }
 
     /// Returns the left child node (subtree) of this node, if any
     pub fn left(&self) -> Option<Self> {
-        // Safety: Nodes only contain indexes to other nodes within `self.nodes`
-        unsafe { Self::new(self.nodes, self.node().left) }
+        // Safety: Nodes only contain pointers to other nodes within `self.nodes`
+        self.node().left.map(|ptr| unsafe { Self::new(self.nodes, ptr) })
     }
 
     /// Returns the right child node (subtree) of this node, if any
     pub fn right(&self) -> Option<Self> {
-        // Safety: Nodes only contain indexes to other nodes within `self.nodes`
-        unsafe { Self::new(self.nodes, self.node().right) }
+        // Safety: Nodes only contain pointers to other nodes within `self.nodes`
+        self.node().right.map(|ptr| unsafe { Self::new(self.nodes, ptr) })
     }
 
     fn node(&self) -> &'a InnerNode<K, V> {
-        // Safety: `self.index` is guaranteed to be a valid index
-        unsafe { self.nodes.get_unchecked(self.index) }
+        // Safety: `self.ptr` is guaranteed to be a valid pointer
+        unsafe { self.nodes.get_unchecked(self.ptr) }
     }
 }
 
@@ -105,10 +105,10 @@ impl<'a, K, V> Node<'a, K, V> {
 /// could result in invalidating the ordering properties.
 pub struct NodeMut<'a, K, V> {
     nodes: &'a mut UnsafeSlab<InnerNode<K, V>>,
-    /// An index into `nodes` for the node represented by this struct
+    /// A pointer into `nodes` for the node represented by this struct
     ///
-    /// Guaranteed to be a valid index
-    index: usize,
+    /// Guaranteed to be a valid pointer
+    ptr: Ptr,
 }
 
 impl<'a, K, V> fmt::Debug for NodeMut<'a, K, V>
@@ -132,9 +132,9 @@ impl<'a, K: PartialEq, V: PartialEq> PartialEq for NodeMut<'a, K, V> {
         // are different, the `self.left() == other.left()` and `self.right() == other.right()` will
         // be false.
 
-        // If the indexes are the same, the values are guaranteed to be equal (similar to `Arc`
+        // If the pointers are the same, the values are guaranteed to be equal (similar to `Arc`
         // using `ptr_eq` to optimize its `PartialEq` impl)
-        let ptr_eq = ptr::eq(self.nodes, other.nodes) && self.index == other.index;
+        let ptr_eq = ptr::eq(self.nodes, other.nodes) && self.ptr == other.ptr;
         ptr_eq || (self.key().eq(other.key()) && self.value().eq(other.value()))
     }
 }
@@ -146,9 +146,9 @@ impl<'a, K, V> NodeMut<'a, K, V> {
     ///
     /// # Safety
     ///
-    /// Must guarantee that `index` represents a valid index into `nodes`.
-    pub(super) unsafe fn new(nodes: &'a mut UnsafeSlab<InnerNode<K, V>>, index: Ptr) -> Option<Self> {
-        index.into_index().map(move |index| Self {nodes, index})
+    /// Must guarantee that `ptr` represents a valid pointer into `nodes`.
+    pub(super) unsafe fn new(nodes: &'a mut UnsafeSlab<InnerNode<K, V>>, ptr: Ptr) -> Self {
+        Self {nodes, ptr}
     }
 
     /// Returns the key of this node
@@ -168,56 +168,56 @@ impl<'a, K, V> NodeMut<'a, K, V> {
 
     /// Returns the value of this node, consuming the node in the process
     pub fn into_value_mut(self) -> &'a mut V {
-        let node = unsafe { self.nodes.get_unchecked_mut(self.index) };
+        let node = unsafe { self.nodes.get_unchecked_mut(self.ptr) };
         &mut node.value
     }
 
     /// Returns true if this node has a left subtree
     pub fn has_left(&self) -> bool {
-        !self.node().left.is_null()
+        !self.node().left.is_none()
     }
 
     /// Returns true if this node has a right subtree
     pub fn has_right(&self) -> bool {
-        !self.node().right.is_null()
+        !self.node().right.is_none()
     }
 
     /// Returns the left child node (subtree) of this node, if any
     pub fn left(self) -> Option<Self> {
-        // Safety: Nodes only contain indexes to other nodes within `self.nodes`
-        unsafe { Self::new(self.nodes, self.node().left) }
+        // Safety: Nodes only contain pointers to other nodes within `self.nodes`
+        self.node().left.map(move |ptr| unsafe { Self::new(self.nodes, ptr) })
     }
 
     /// Returns the right child node (subtree) of this node, if any
     pub fn right(self) -> Option<Self> {
-        // Safety: Nodes only contain indexes to other nodes within `self.nodes`
-        unsafe { Self::new(self.nodes, self.node().right) }
+        // Safety: Nodes only contain pointers to other nodes within `self.nodes`
+        self.node().right.map(move |ptr| unsafe { Self::new(self.nodes, ptr) })
     }
 
     /// Private API for updating the left subtree of this node
-    pub(crate) fn set_left(&'a mut self, index: Ptr) {
-        self.node_mut().left = index;
+    pub(crate) fn set_left(&'a mut self, ptr: Ptr) {
+        self.node_mut().left = Some(ptr);
     }
 
     /// Private API for updating the right subtree of this node
-    pub(crate) fn set_right(&'a mut self, index: Ptr) {
-        self.node_mut().right = index;
+    pub(crate) fn set_right(&'a mut self, ptr: Ptr) {
+        self.node_mut().right = Some(ptr);
     }
 
     /// Private API for pushing a new node and assigning the left subtree
     /// of this node
     pub(crate) fn push_left(&'a mut self, key: K, value: V) -> Ptr {
-        let index = push_node(self.nodes, key, value);
-        self.set_left(index);
-        index
+        let ptr = self.nodes.push(InnerNode::new(key, value));
+        self.set_left(ptr);
+        ptr
     }
 
     /// Private API for pushing a new node and assigning the right subtree
     /// of this node
     pub(crate) fn push_right(&'a mut self, key: K, value: V) -> Ptr {
-        let index = push_node(self.nodes, key, value);
-        self.set_right(index);
-        index
+        let ptr = self.nodes.push(InnerNode::new(key, value));
+        self.set_right(ptr);
+        ptr
     }
 
     /// Private API for replacing the value of this node and returning the
@@ -227,12 +227,12 @@ impl<'a, K, V> NodeMut<'a, K, V> {
     }
 
     fn node(&'a self) -> &'a InnerNode<K, V> {
-        // Safety: `self.index` is guaranteed to be a valid index
-        unsafe { self.nodes.get_unchecked(self.index) }
+        // Safety: `self.ptr` is guaranteed to be a valid pointer
+        unsafe { self.nodes.get_unchecked(self.ptr) }
     }
 
     fn node_mut(&'a mut self) -> &'a mut InnerNode<K, V> {
-        // Safety: `self.index` is guaranteed to be a valid index
-        unsafe { self.nodes.get_unchecked_mut(self.index) }
+        // Safety: `self.ptr` is guaranteed to be a valid pointer
+        unsafe { self.nodes.get_unchecked_mut(self.ptr) }
     }
 }

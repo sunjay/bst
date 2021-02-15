@@ -1,7 +1,6 @@
 use std::fmt;
-use std::ptr;
 use std::slice;
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
 use std::mem::{self, MaybeUninit};
 use std::marker::PhantomData;
 
@@ -80,6 +79,17 @@ unsafe impl AllocStrategy for ExponentialAlloc {
         ChunkPos {chunk_index, item_index}
     }
 }
+
+/// A type-erased pointer to an element in the arena
+///
+/// Ensures that elements can still be accessed performantly while also assigning the correct
+/// lifetime to references created from this pointer.
+///
+/// Needed because converting an index to a chunk index and item index can be expensive. Uses
+/// `NonNull` so that `Option<Ptr>` gets the layout optimizations that `Option<NonNull>` gets.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Ptr(NonNull<()>);
 
 /// An arena allocator that guarantees that the addresses produced remain usable regardless of how
 /// many items are added.
@@ -188,11 +198,35 @@ impl<T> StableArena<T> {
         self.capacity
     }
 
+    /// Returns a reference to a value in the arena
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with a pointer that is no longer valid is undefined behavior even if the
+    /// resulting reference is not used.
+    pub unsafe fn get_unchecked(&self, ptr: Ptr) -> &T {
+        // Safety: This pointer originated from a `NonNull<T>` so it is safe to cast it back
+        //   (Technically it was a `NonNull<MaybeUninit<T>>` but that doesn't make a difference.)
+        &*ptr.0.cast().as_ptr()
+    }
+
+    /// Returns a mutable reference to a value in the arena
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with a pointer that is no longer valid is undefined behavior even if the
+    /// resulting reference is not used.
+    pub unsafe fn get_unchecked_mut(&mut self, ptr: Ptr) -> &mut T {
+        // Safety: This pointer originated from a `NonNull<T>` so it is safe to cast it back
+        //   (Technically it was a `NonNull<MaybeUninit<T>>` but that doesn't make a difference.)
+        &mut *ptr.0.cast().as_ptr()
+    }
+
     /// Allocates the given value in the arena and returns a stable address to the value
     ///
     /// The returned pointer is guaranteed to be valid as long as no method is called that would
     /// invalidate the pointer (e.g. the `clear` method).
-    pub fn alloc(&mut self, value: T) -> NonNull<T> {
+    pub fn alloc(&mut self, value: T) -> Ptr {
         debug_assert!(self.len <= self.capacity);
         // The length can never exceed the capacity
         if self.len == self.capacity {
@@ -215,7 +249,7 @@ impl<T> StableArena<T> {
         self.len += 1;
 
         // Safety: `MaybeUninit<T>` is guaranteed to have the same size, alignment, and ABI as T
-        unsafe { mem::transmute(item_ptr) }
+        Ptr(unsafe { mem::transmute(item_ptr) })
     }
 
     /// Returns an iterator over the arena
@@ -367,16 +401,6 @@ impl<T> StableArena<T> {
     }
 }
 
-impl<T> IntoIterator for StableArena<T> {
-    type Item = T;
-
-    type IntoIter = IntoIter<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        todo!()
-    }
-}
-
 //TODO: This needs a `#[may_dangle]` attribute on `T`
 // See: https://forge.rust-lang.org/libs/maintaining-std.html#is-there-a-manual-drop-implementation
 impl<T> Drop for StableArena<T> {
@@ -396,6 +420,54 @@ impl<T> Drop for StableArena<T> {
     }
 }
 
+impl<T> IntoIterator for StableArena<T> {
+    type Item = T;
+
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        todo!()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a StableArena<T> {
+    type Item = &'a T;
+
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut StableArena<T> {
+    type Item = &'a mut T;
+
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+pub struct IntoIter<T> {
+    _marker: PhantomData<T>, //TODO
+}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_ptr().map(|(_, item)| item)
+    }
+}
+
+impl<T> ArenaIterator for IntoIter<T> {
+    fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
+        todo!()
+    }
+}
+
 pub struct Iter<'a, T> {
     _marker: PhantomData<&'a T>, //TODO
 }
@@ -404,6 +476,12 @@ impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.next_ptr().map(|(_, item)| item)
+    }
+}
+
+impl<'a, T> ArenaIterator for Iter<'a, T> {
+    fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
         todo!()
     }
 }
@@ -416,19 +494,35 @@ impl<'a, T> Iterator for IterMut<'a, T> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.next_ptr().map(|(_, item)| item)
+    }
+}
+
+impl<'a, T> ArenaIterator for IterMut<'a, T> {
+    fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)> {
         todo!()
     }
 }
 
-pub struct IntoIter<T> {
-    _marker: PhantomData<T>, //TODO
+pub trait ArenaIterator: Sized + Iterator {
+    /// Returns the next element of this iterator and its corresponding pointer
+    fn next_ptr(&mut self) -> Option<(Ptr, Self::Item)>;
+
+    /// Returns an iterator that also yields the corresponding pointer for each element
+    fn pointers(self) -> Pointers<Self> {
+        Pointers {iter: self}
+    }
 }
 
-impl<T> Iterator for IntoIter<T> {
-    type Item = T;
+pub struct Pointers<I: ArenaIterator> {
+    iter: I,
+}
+
+impl<I: ArenaIterator> Iterator for Pointers<I> {
+    type Item = (Ptr, I::Item);
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        self.iter.next_ptr()
     }
 }
 
@@ -483,19 +577,17 @@ mod tests {
         #[cfg(miri)]
         const ALLOCS: usize = 32;
 
-        let mut addrs = Vec::with_capacity(ALLOCS);
+        let mut ptrs = Vec::with_capacity(ALLOCS);
 
         // The arena allocator will resize multiple times during this test
         let mut arena = StableArena::new();
         for i in 0..ALLOCS {
             // Pushing a type that implements drop
-            addrs.push(arena.alloc(Rc::new(i)));
+            ptrs.push(arena.alloc(Rc::new(i)));
 
             // Check that all addresses are still valid
-            for (j, addr) in addrs.iter().enumerate() {
-                unsafe {
-                    assert_eq!(**addr.as_ref(), j);
-                }
+            for (j, ptr) in ptrs.iter().enumerate() {
+                assert_eq!(unsafe { **arena.get_unchecked(*ptr) }, j);
             }
         }
     }
@@ -523,9 +615,9 @@ mod tests {
         // push should not change capacity if capacity is greater than length
         assert!(arena.capacity() > arena.len());
 
-        let mut addrs = Vec::new();
+        let mut ptrs = Vec::new();
         for i in 0.. {
-            addrs.push(arena.alloc(i.to_string()));
+            ptrs.push(arena.alloc(i.to_string()));
 
             if arena.capacity() <= arena.len() {
                 break;
@@ -538,8 +630,8 @@ mod tests {
         // shrink to fit should not affect items
         arena.shrink_to_fit();
         let capacity = arena.capacity();
-        for (i, addr) in addrs.iter().copied().enumerate() {
-            assert_eq!(unsafe { addr.as_ref() }, &i.to_string());
+        for (i, ptr) in ptrs.iter().copied().enumerate() {
+            assert_eq!(unsafe { arena.get_unchecked(ptr) }, &i.to_string());
             assert_eq!(arena.capacity(), capacity);
         }
 
@@ -551,7 +643,7 @@ mod tests {
 
         //TODO: Add back once we have `pop()`
         // pop should not change capacity
-        // for index in indexes {
+        // for _ in ptrs {
         //     arena.pop();
         //     assert_eq!(slab.capacity(), capacity);
         // }

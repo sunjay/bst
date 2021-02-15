@@ -42,7 +42,7 @@ impl<'a, K, V> Iterator for IterPostorder<'a, K, V> {
                     // Remove right from stack
                     self.stack.pop();
 
-                    // Push the current index back onto the stack
+                    // Push the current node back onto the stack
                     self.stack.push(node);
 
                     node = right;

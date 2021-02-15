@@ -6,14 +6,14 @@ use super::InnerNode;
 
 pub struct IterPreorder<'a, K, V> {
     nodes: &'a UnsafeSlab<InnerNode<K, V>>,
-    stack: Vec<usize>,
+    stack: Vec<Ptr>,
 }
 
 impl<'a, K, V> IterPreorder<'a, K, V> {
-    pub(super) fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, root: Ptr) -> Self {
+    pub(super) fn new(nodes: &'a UnsafeSlab<InnerNode<K, V>>, root: Option<Ptr>) -> Self {
         Self {
             nodes,
-            stack: root.into_index().into_iter().collect(),
+            stack: root.into_iter().collect(),
         }
     }
 }
@@ -23,11 +23,11 @@ impl<'a, K, V> Iterator for IterPreorder<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let top_index = self.stack.pop()?;
-        // Safety: any indexes added to the stack are valid in `self.nodes`
-        let node = unsafe { self.nodes.get_unchecked(top_index) };
-        self.stack.extend(node.right.into_index());
-        self.stack.extend(node.left.into_index());
+        let top_ptr = self.stack.pop()?;
+        // Safety: any pointers added to the stack are valid in `self.nodes`
+        let node = unsafe { self.nodes.get_unchecked(top_ptr) };
+        self.stack.extend(node.right);
+        self.stack.extend(node.left);
         Some((&node.key, &node.value))
     }
 }

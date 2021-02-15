@@ -22,8 +22,8 @@ use crate::slab::{UnsafeSlab, Ptr};
 struct InnerNode<K, V> {
     key: K,
     value: V,
-    left: Ptr,
-    right: Ptr,
+    left: Option<Ptr>,
+    right: Option<Ptr>,
 }
 
 // We've designed `InnerNode` to use as little space as possible to help with cache
@@ -35,15 +35,10 @@ impl<K, V> InnerNode<K, V> {
         Self {
             key,
             value,
-            left: Ptr::default(),
-            right: Ptr::default(),
+            left: None,
+            right: None,
         }
     }
-}
-
-fn push_node<K, V>(nodes: &mut UnsafeSlab<InnerNode<K, V>>, key: K, value: V) -> Ptr {
-    let index = nodes.push(InnerNode::new(key, value));
-    Ptr::new(index).expect("cannot have more than usize::MAX - 1 nodes")
 }
 
 /// A binary search tree (BST)
@@ -59,7 +54,7 @@ fn push_node<K, V>(nodes: &mut UnsafeSlab<InnerNode<K, V>>, key: K, value: V) ->
 /// implementation may structure the tree however is needed to fulfill the BST properties.
 pub struct BSTMap<K, V> {
     nodes: UnsafeSlab<InnerNode<K, V>>,
-    root: Ptr,
+    root: Option<Ptr>,
 }
 
 impl<K, V> Default for BSTMap<K, V> {
@@ -91,21 +86,21 @@ impl<K: Clone, V: Clone> Clone for BSTMap<K, V> {
 
         // For a balanced tree, this will use O(log n) space.
         let mut stack = Vec::new();
-        stack.extend(self.root.into_index());
+        stack.extend(self.root);
 
         // Walk tree and initialize nodes
-        while let Some(index) = stack.pop() {
-            // Safety: any indexes added to the stack are valid in `self.nodes`
-            let node = unsafe { self.nodes.get_unchecked(index) };
-            stack.extend(node.right.into_index());
-            stack.extend(node.left.into_index());
+        while let Some(ptr) = stack.pop() {
+            // Safety: any pointers added to the stack are valid in `self.nodes`
+            let node = unsafe { self.nodes.get_unchecked(ptr) };
+            stack.extend(node.right);
+            stack.extend(node.left);
 
             let new_entry = MaybeUninit::new(node.clone());
-            // Safety: initializing the same index in the new set of nodes as was used in the old
+            // Safety: initializing the same pointer in the new set of nodes as was used in the old
             // set of nodes, so it should be valid. Furthermore, `MaybeUninit` does not need to be
             // initialized, so `&mut MaybeUninit` does not cause UB, even though the memory has not
             // been initialized yet.
-            unsafe { *nodes.get_unchecked_mut(index) = new_entry; }
+            unsafe { *nodes.get_unchecked_mut(ptr) = new_entry; }
         }
 
         Self {
@@ -222,7 +217,7 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// assert!(!map.is_empty());
     /// ```
     pub fn is_empty(&self) -> bool {
-        debug_assert!(self.nodes.is_empty() == self.root.is_null());
+        debug_assert!(self.nodes.is_empty() == self.root.is_none());
         self.nodes.is_empty()
     }
 
@@ -389,8 +384,8 @@ impl<K: Ord, V> BSTMap<K, V> {
         let mut current = match self.root_mut() {
             Some(root) => Some(root),
             None => {
-                let index = push_node(&mut self.nodes, key, value);
-                self.root = index;
+                let ptr = self.nodes.push(InnerNode::new(key, value));
+                self.root = Some(ptr);
                 return None;
             },
         };
@@ -469,12 +464,12 @@ impl<K: Ord, V> BSTMap<K, V> {
         where K: Borrow<Q>,
               Q: Ord + ?Sized,
     {
-        let mut parent = Ptr::null();
+        let mut parent = None;
         let mut current = self.root;
 
-        while let Some(index) = current.into_index() {
-            // Safety: any indexes in the tree are valid in `self.nodes`
-            let node = unsafe { self.nodes.get_unchecked(index) };
+        while let Some(ptr) = current {
+            // Safety: any pointers in the tree are valid in `self.nodes`
+            let node = unsafe { self.nodes.get_unchecked(ptr) };
 
             match key.cmp(node.key.borrow()) {
                 Ordering::Less => {
@@ -492,38 +487,37 @@ impl<K: Ord, V> BSTMap<K, V> {
         }
 
         // If a node was found, remove it, otherwise return None
-        let index = current.into_index()?;
-        // Safety: any indexes in the tree are valid in `self.nodes`
-        let node = unsafe { self.nodes.get_unchecked_mut(index) };
+        let ptr = current?;
+        // Safety: any pointers in the tree are valid in `self.nodes`
+        let node = unsafe { self.nodes.get_unchecked_mut(ptr) };
 
         // Find the node (if any) to replace `current` with
-        let replace_with = match (node.left.into_index(), node.right.into_index()) {
+        let replace_with = match (node.left, node.right) {
             // For zero children, replace `node` with nothing
-            (None, None) => Ptr::null(),
+            (None, None) => None,
 
             // For one child, replace `node` with that child
-            (Some(child_index), None) |
-            (None, Some(child_index)) => {
-                // Safety: if this index was a valid pointer before, it is valid now
-                unsafe { Ptr::new_unchecked(child_index) }
+            (Some(child_ptr), None) |
+            (None, Some(child_ptr)) => {
+                Some(child_ptr)
             },
 
             // For two children, replace `node` with its in-order successor
-            (Some(left_index), Some(right_index)) => {
-                // Safety: any indexes from the tree are valid in `self.nodes`
-                let right_child = unsafe { self.nodes.get_unchecked(right_index) };
+            (Some(left_ptr), Some(right_ptr)) => {
+                // Safety: any pointers from the tree are valid in `self.nodes`
+                let right_child = unsafe { self.nodes.get_unchecked(right_ptr) };
 
-                let inorder_succ = match right_child.left.into_index() {
+                let inorder_succ = match right_child.left {
                     Some(right_child_left) => {
                         // The leftmost child of the right child is the in-order successor
-                        let mut inorder_succ_parent = right_index;
+                        let mut inorder_succ_parent = right_ptr;
                         let mut inorder_succ = right_child_left;
 
                         loop {
-                            // Safety: any indexes from the tree are valid in `self.nodes`
+                            // Safety: any pointers from the tree are valid in `self.nodes`
                             let inorder_succ_node = unsafe { self.nodes.get_unchecked(inorder_succ) };
 
-                            match inorder_succ_node.left.into_index() {
+                            match inorder_succ_node.left {
                                 Some(inorder_succ_left) => {
                                     inorder_succ_parent = inorder_succ;
                                     inorder_succ = inorder_succ_left;
@@ -537,13 +531,13 @@ impl<K: Ord, V> BSTMap<K, V> {
                         // has no left child by definition, so we can just replace it with its right
                         // child (if any).
 
-                        // Safety: any indexes from the tree are valid in `self.nodes`
+                        // Safety: any pointers from the tree are valid in `self.nodes`
                         let inorder_succ_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ) };
                         // Remove the right child so we no longer need to refer to the value pointed
                         // to by `inorder_succ` in order to retrieve it
                         let inorder_succ_right = inorder_succ_node.right;
 
-                        // Safety: any indexes from the tree are valid in `self.nodes`. This
+                        // Safety: any pointers from the tree are valid in `self.nodes`. This
                         //   variable may overlap with `right_child`, so we cannot use that variable
                         //   after this point.
                         let inorder_succ_parent_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ_parent) };
@@ -552,45 +546,41 @@ impl<K: Ord, V> BSTMap<K, V> {
                         // it from its parent.
                         inorder_succ_parent_node.left = inorder_succ_right;
 
-                        // Safety: any indexes from the tree are valid in `self.nodes`
+                        // Safety: any pointers from the tree are valid in `self.nodes`
                         // Need to get this again so mutable references don't overlap
                         let inorder_succ_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ) };
-                        // Safety: if this index was a valid pointer before, it is valid now
-                        let right_ptr = unsafe { Ptr::new_unchecked(right_index) };
                         // Since the in-order successor is going to replace the removed node, its
                         // right child becomes the previous right child of the removed node.
-                        inorder_succ_node.right = right_ptr;
+                        inorder_succ_node.right = Some(right_ptr);
 
                         inorder_succ
                     },
 
                     // No left child on right_child, so right_child is the in-order successor
                     None => {
-                        right_index
+                        right_ptr
                     },
                 };
 
-                // Safety: any indexes from the tree are valid in `self.nodes`
+                // Safety: any pointers from the tree are valid in `self.nodes`
                 let inorder_succ_node = unsafe { self.nodes.get_unchecked_mut(inorder_succ) };
-                // Safety: if this index was a valid pointer before, it is valid now
-                let left_ptr = unsafe { Ptr::new_unchecked(left_index) };
                 // The in-order successor has no left child by definition, so we set it to have the
                 // left child of the node being deleted since that is the state we want once the
                 // deletion is complete
-                inorder_succ_node.left = left_ptr;
+                inorder_succ_node.left = Some(left_ptr);
 
-                // Safety: if this index was a valid pointer before, it is valid now
-                unsafe { Ptr::new_unchecked(inorder_succ) }
+                // Safety: if this pointer was a valid pointer before, it is valid now
+                Some(inorder_succ)
             },
         };
 
         // Remove the current node from its parent and replace it with the node computed above
 
-        match parent.into_index() {
+        match parent {
             // Remove the node from the parent
-            Some(parent_index) => {
-                // Safety: any indexes from the tree are valid in `self.nodes`
-                let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_index) };
+            Some(parent_ptr) => {
+                // Safety: any pointers from the tree are valid in `self.nodes`
+                let parent_node = unsafe { self.nodes.get_unchecked_mut(parent_ptr) };
 
                 if parent_node.left == current {
                     parent_node.left = replace_with;
@@ -608,11 +598,11 @@ impl<K: Ord, V> BSTMap<K, V> {
             },
         }
 
-        // Safety: any indexes in the tree are valid in `self.nodes` The previous `node` variable
+        // Safety: any pointers in the tree are valid in `self.nodes` The previous `node` variable
         //   which was referencing this memory will end here so there is no overlap in lifetimes. We
         //   also shadow the name to extra make sure that there can be no UB. The node being removed
         //   should no longer be referenced anywhere in the tree.
-        let node = unsafe { self.nodes.remove(index) };
+        let node = unsafe { self.nodes.remove(ptr) };
         Some((node.key, node.value))
     }
 
@@ -637,7 +627,7 @@ impl<K: Ord, V> BSTMap<K, V> {
         let Self {nodes, root} = self;
 
         nodes.clear();
-        *root = Ptr::default();
+        *root = None;
     }
 
     /// Performs a pre-order traversal of the tree
@@ -718,8 +708,8 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// }
     /// ```
     pub fn root(&self) -> Option<Node<K, V>> {
-        // Safety: `self.root` is a valid index into `self.nodes`
-        unsafe { Node::new(&self.nodes, self.root) }
+        // Safety: `self.root` is a valid pointer into `self.nodes`
+        self.root.map(|ptr| unsafe { Node::new(&self.nodes, ptr) })
     }
 
     /// Returns the root node of the tree, or `None` if the tree is empty
@@ -731,8 +721,8 @@ impl<K: Ord, V> BSTMap<K, V> {
     /// This is a low-level API meant to be used for implementing traversals. The inner structure of
     /// the tree can be anything that satisfies the BST properties.
     pub fn root_mut(&mut self) -> Option<NodeMut<K, V>> {
-        // Safety: `self.root` is a valid index into `self.nodes`
-        unsafe { NodeMut::new(&mut self.nodes, self.root) }
+        // Safety: `self.root` is a valid pointer into `self.nodes`
+        self.root.map(move |ptr| unsafe { NodeMut::new(&mut self.nodes, ptr) })
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted in the map. The

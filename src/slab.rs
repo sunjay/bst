@@ -1,70 +1,12 @@
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::marker::PhantomData;
 
+use crate::arena::{StableArena, ArenaIterator};
+
+pub use crate::arena::Ptr;
+
 #[cfg(test)]
 use static_assertions::{const_assert, const_assert_eq};
-
-/// An index into a slab, or "null"
-///
-/// This type is essentially `Option<usize>`. The value usize::MAX is
-/// reserved to represent `None` or "null".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-pub struct Ptr(usize);
-
-// We've designed `Ptr` to use as little space as possible to help with cache
-#[cfg(test)]
-const_assert_eq!(mem::size_of::<Ptr>(), 8);
-// Using `Option<usize>` directly would use more space.
-#[cfg(test)]
-const_assert_eq!(mem::size_of::<Option<usize>>(), 16);
-
-impl Default for Ptr {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::null()
-    }
-}
-
-impl Ptr {
-    #[inline(always)]
-    pub fn new(index: usize) -> Option<Self> {
-        if index == usize::MAX {
-            None
-        } else {
-            Some(Ptr(index))
-        }
-    }
-
-    #[inline(always)]
-    pub unsafe fn new_unchecked(index: usize) -> Self {
-        Ptr(index)
-    }
-
-    #[inline(always)]
-    pub fn null() -> Self {
-        Ptr(usize::MAX)
-    }
-
-    // Methods on this type must be `#[inline]` to help the compiler see that the `Option` values
-    // are only intermediate values used to make writing code easier. Instead of checking for `None`
-    // and then `usize::MAX`, we want the compiler to just check the latter.
-    #[inline(always)]
-    pub fn into_index(self) -> Option<usize> {
-        let Ptr(index) = self;
-        if index == usize::MAX {
-            None
-        } else {
-            Some(index)
-        }
-    }
-
-    #[inline(always)]
-    pub fn is_null(self) -> bool {
-        self.0 == usize::MAX
-    }
-}
-
 
 #[repr(C)]
 union Entry<T> {
@@ -72,11 +14,19 @@ union Entry<T> {
     free: FreeEntry,
 }
 
+/// An item in the free list
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct FreeEntry {
+    /// The next entry in the free list or `None` if this is the last entry in
+    /// the free list
+    next: Option<Ptr>,
+}
+
 // It is important to assert that the compiler thinks that any entry (even an entry with a type that
 // needs to be dropped) does not need to be dropped. This is necessary because we manually drop each
 // entry and we do not want the entry to be dropped twice. Having this also enables some important
-// performance improvements since `Vec` may do less work when the inner type does not need to be
-// dropped.
+// performance improvements since collection types may do less work when the inner type does not
+// need to be dropped.
 #[cfg(test)]
 const_assert!(!mem::needs_drop::<Entry<Vec<i32>>>());
 // Explicitly tracking the size of entry because we want to limit the overhead added to each entry
@@ -84,33 +34,31 @@ const_assert!(!mem::needs_drop::<Entry<Vec<i32>>>());
 #[cfg(test)]
 const_assert_eq!(mem::size_of::<Entry<()>>(), 8); // max of 8 bytes overhead per entry
 
-/// An item in the free list
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct FreeEntry {
-    /// The index of the next entry in the free list or `Ptr::null()` if this is the last entry in
-    /// the free list
-    next: Ptr,
-}
+// Check that `Option<Ptr>` uses as little space as possible (to help with cache)
+#[cfg(test)]
+const_assert_eq!(mem::size_of::<Option<Ptr>>(), 8);
+// Using `Option<usize>` directly would use more space.
+#[cfg(test)]
+const_assert_eq!(mem::size_of::<Option<usize>>(), 16);
 
 /// An allocation primitive similar to `Vec`, but implemented to reuse space from removed entries.
 ///
-/// Items are kept contiguously in memory, but indexes are not shifted when an individual item is
-/// removed. Instead of always pushing items after the previously pushed item, this data structure
-/// will reuse space from previously removed entries when possible. This makes removal cheaper than
-/// a standard `Vec<T>`.
+/// Indexes are not shifted when any individual item is removed. Instead of always pushing items
+/// after the previously pushed item, this data structure will reuse space from previously removed
+/// entries when possible. This makes removal cheaper than a standard `Vec<T>`.
 ///
 /// The slab is unsafe because it does not explicitly add data to each entry to track whether it was
 /// previously removed. That means that it is possible to call one of the unsafe get methods using
 /// an index to memory that is no longer considered initialized.
 pub struct UnsafeSlab<T> {
-    items: Vec<Entry<T>>,
-    /// The index of the first entry in the free list or Ptr::null() if the free list is empty
+    items: StableArena<Entry<T>>,
+    /// A pointer to the first entry in the free list or `None` if the free list is empty
     ///
     /// The free list is a linked list stored in `items` that is used as a stack to track which
     /// entries have space that can be reused in calls to `push`. This is an internal-only
     /// implementation detail and no methods make guarantees about how the free list will be
     /// manipulated.
-    free_list_head: Ptr,
+    free_list_head: Option<Ptr>,
     /// The length of the free list
     free_len: usize,
     // NOTE: this marker has no consequences for variance, but is necessary for the drop checker to
@@ -125,8 +73,8 @@ pub struct UnsafeSlab<T> {
 impl<T> Default for UnsafeSlab<T> {
     fn default() -> Self {
         Self {
-            items: Vec::default(),
-            free_list_head: Ptr::null(),
+            items: StableArena::default(),
+            free_list_head: None,
             free_len: 0,
             _marker: PhantomData,
         }
@@ -148,7 +96,7 @@ impl<T> UnsafeSlab<T> {
     /// `capacity` is 0, the slab will not allocate.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            items: Vec::with_capacity(capacity),
+            items: StableArena::with_capacity(capacity),
             ..Self::default()
         }
     }
@@ -184,7 +132,7 @@ impl<T> UnsafeSlab<T> {
     /// slab. The transmute is only considered safe if the current structure of the slab is
     /// maintained. Modifying any other entries that currently aren't occupied will result in UB.
     pub fn clone_uninit(&self) -> UnsafeSlab<MaybeUninit<T>> {
-        let mut items: Vec<Entry<MaybeUninit<T>>> = Vec::with_capacity(self.items.capacity());
+        let mut items: StableArena<Entry<MaybeUninit<T>>> = StableArena::with_capacity(self.items.capacity());
         // Safety: since `self.items.len() <= self.items.capacity()`, it will be here too.
         //         This is assuming that unions like `Entry<T>` do not need to be initialized
         //         until used.
@@ -192,14 +140,14 @@ impl<T> UnsafeSlab<T> {
 
         // Traverse the free list and initialize each entry
         let mut current = self.free_list_head;
-        while let Some(index) = current.into_index() {
-            // Safety: Items on the free list are guaranteed to be valid indexes
-            let entry = unsafe { self.items.get_unchecked(index) };
+        while let Some(ptr) = current {
+            // Safety: Items on the free list are guaranteed to be valid pointers
+            let entry = unsafe { self.items.get_unchecked(ptr) };
             // Safety: All items on the free list are guaranteed to be FreeEntry structs
             let free_entry = unsafe { entry.free };
             // Safety: The length of `items` is the same as `self.items`, so if something was a
-            // valid index into `self.items`, it should be a valid index into `items`.
-            unsafe { *items.get_unchecked_mut(index) = Entry {free: free_entry}; }
+            // valid pointer into `self.items`, it should be a valid pointer into `items`.
+            unsafe { *items.get_unchecked_mut(ptr) = Entry {free: free_entry}; }
 
             current = free_entry.next;
         }
@@ -216,31 +164,31 @@ impl<T> UnsafeSlab<T> {
     ///
     /// # Safety
     ///
-    /// Calling this method with an out-of-bounds index or an index that was previously removed is
-    /// undefined behavior even if the resulting reference is not used.
-    pub unsafe fn get_unchecked(&self, index: usize) -> &T {
-        &self.items.get_unchecked(index).value
+    /// Calling this method with a pointer that was previously removed is undefined behavior even if
+    /// the resulting reference is not used.
+    pub unsafe fn get_unchecked(&self, ptr: Ptr) -> &T {
+        &self.items.get_unchecked(ptr).value
     }
 
     /// Returns a mutable reference to a value in the slab
     ///
     /// # Safety
     ///
-    /// Calling this method with an out-of-bounds index or an index that was previously removed is
-    /// undefined behavior even if the resulting reference is not used.
-    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
-        &mut self.items.get_unchecked_mut(index).value
+    /// Calling this method with a pointer that was previously removed is undefined behavior even if
+    /// the resulting reference is not used.
+    pub unsafe fn get_unchecked_mut(&mut self, ptr: Ptr) -> &mut T {
+        &mut self.items.get_unchecked_mut(ptr).value
     }
 
-    /// Pushes a value into the slab and returns the index at which it was inserted.
+    /// Pushes a value into the slab and returns the pointer to the location where it was inserted.
     ///
     /// The item may be inserted at the end of the list, or in the space from an item was previously
-    /// removed. Indexes returned from this method are considered valid for use with the get
+    /// removed. Pointers returned from this method are considered valid for use with the get
     /// methods.
-    pub fn push(&mut self, value: T) -> usize {
+    pub fn push(&mut self, value: T) -> Ptr {
         // Check if we can reuse some space from the free list
-        if let Some(free_list_head) = self.free_list_head.into_index() {
-            // Safety: Items on the free list are guaranteed to be valid indexes
+        if let Some(free_list_head) = self.free_list_head {
+            // Safety: Items on the free list are guaranteed to be valid pointers
             let entry = unsafe { self.items.get_unchecked_mut(free_list_head) };
 
             // Update the free list to point to the next free list entry
@@ -255,15 +203,7 @@ impl<T> UnsafeSlab<T> {
             return free_list_head;
         }
 
-        let index = self.items.len();
-        // Since we store `Ptr` internally, we can't have usize::MAX as a valid index into the slab
-        if index == usize::MAX {
-            panic!("cannot have more than usize::MAX - 1 entries in slab");
-        }
-
-        self.items.push(Entry {value: ManuallyDrop::new(value)});
-
-        index
+        self.items.alloc(Entry {value: ManuallyDrop::new(value)})
     }
 
     /// Removes an item from the slab, returning its value.
@@ -271,18 +211,18 @@ impl<T> UnsafeSlab<T> {
     /// Note that this method has no effect on the allocated capacity of the slab.
     ///
     /// The space for the item will be reused in future calls to `push`. This does not move or
-    /// modify any other entries in the slab. Their indexes remain the same and can still be used.
+    /// modify any other entries in the slab. Their pointers remain the same and can still be used.
     ///
     /// Use `clear` (and possibly `shrink_to_fit`) to reclaim the space used by removed entries.
     ///
     /// # Safety
     ///
-    /// Calling this method with an out-of-bounds index or an index that was previously removed is
-    /// undefined behavior even if the resulting reference is not used.
-    pub unsafe fn remove(&mut self, index: usize) -> T {
+    /// Calling this method with a pointer that was previously removed is undefined behavior even if
+    /// the resulting reference is not used.
+    pub unsafe fn remove(&mut self, ptr: Ptr) -> T {
         //TODO: If removing this makes len() == 0, we can call `reset_internal_state` and clear the
         //      free list
-        let entry = self.items.get_unchecked_mut(index);
+        let entry = self.items.get_unchecked_mut(ptr);
         // Retrieve the value in this entry by swapping in a free entry
         let prev_value = mem::replace(entry, Entry {
             free: FreeEntry {next: self.free_list_head},
@@ -290,7 +230,7 @@ impl<T> UnsafeSlab<T> {
 
         //TODO: If removing from the end of the slab, we may be able to call `set_len` instead of
         //      using the free list (without this `shrink_to_fit` never does anything)
-        self.free_list_head = Ptr::new_unchecked(index);
+        self.free_list_head = Some(ptr);
         self.free_len += 1;
 
         ManuallyDrop::into_inner(prev_value.value)
@@ -300,7 +240,7 @@ impl<T> UnsafeSlab<T> {
     ///
     /// Note that this method has no effect on the allocated capacity of the slab.
     ///
-    /// This invalidates all previous indexes returned from `push`.
+    /// This invalidates all previous pointers returned from `push`.
     pub fn clear(&mut self) {
         use std::collections::HashSet;
 
@@ -315,33 +255,31 @@ impl<T> UnsafeSlab<T> {
             return;
         }
 
-        // Record the indexes that are in the free list so we don't need to iterate through it over
+        // Record the pointers that are in the free list so we don't need to iterate through it over
         // and over again as we go through each entry in the slab to drop them all
         //TODO: We can use `bitvec::BitVec` instead of `HashSet` to save on space
-        let mut free_indexes = HashSet::with_capacity(self.free_len);
+        let mut free_pointers = HashSet::with_capacity(self.free_len);
 
         let mut current = self.free_list_head;
-        while let Some(index) = current.into_index() {
-            free_indexes.insert(index);
+        while let Some(ptr) = current {
+            free_pointers.insert(ptr);
 
-            // Safety: Items on the free list are guaranteed to be valid indexes
-            let entry = unsafe { self.items.get_unchecked(index) };
+            // Safety: Items on the free list are guaranteed to be valid pointer
+            let entry = unsafe { self.items.get_unchecked(ptr) };
             // Safety: All items on the free list are guaranteed to be FreeEntry structs
             let next_free = unsafe { entry.free }.next;
             current = next_free;
         }
 
-        for index in 0..self.items.len() {
-            if free_indexes.contains(&index) {
+        for (ptr, entry) in self.items.iter_mut().pointers() {
+            if free_pointers.contains(&ptr) {
                 continue;
             }
 
-            // Safety: The `index` is between 0 and self.items.len(), so it must be valid
-            let entry = unsafe { self.items.get_unchecked_mut(index) };
             // Safety: The item was not on the free list, so it must be a value
             let value = unsafe { &mut entry.value };
-            // Safety: This call only happens once because `Entry` must be dropped manually and each
-            // `index` is unique
+            // Safety: We know that this call only happens once because `Entry` must be dropped
+            //   manually and each `ptr` is unique
             unsafe { ManuallyDrop::drop(value); }
         }
 
@@ -360,9 +298,9 @@ impl<T> UnsafeSlab<T> {
         // Clearing `items` has the effect of marking every entry as free without affecting the
         // allocated capacity.
         items.clear();
-        // Need to clear the free list so we don't end up indexing out of bounds into `items` now
-        // that has been cleared
-        *free_list_head = Ptr::null();
+        // Need to clear the free list so we don't access invalid pointers now that `items` has been
+        // cleared
+        *free_list_head = None;
         *free_len = 0;
     }
 
@@ -382,7 +320,7 @@ impl<T> UnsafeSlab<T> {
         self.items.shrink_to_fit()
     }
 
-    //TODO: Provide an API for interactive memory compaction (clears the free list while yielding indexes)
+    //TODO: Provide an API for interactive memory compaction (clears the free list while yielding pointers or something)
 }
 
 //TODO: This needs a `#[may_dangle]` attribute on `T`
@@ -403,31 +341,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ptr_api() {
-        let ptr = Ptr::new(0).unwrap();
-        assert_eq!(ptr.into_index(), Some(0));
-        assert!(!ptr.is_null());
-
-        let ptr = Ptr::new(1).unwrap();
-        assert_eq!(ptr.into_index(), Some(1));
-        assert!(!ptr.is_null());
-
-        let ptr = Ptr::new(5).unwrap();
-        assert_eq!(ptr.into_index(), Some(5));
-        assert!(!ptr.is_null());
-
-        let ptr = Ptr::new(usize::MAX);
-        assert_eq!(ptr, None);
-
-        let ptr = Ptr::null();
-        assert_eq!(ptr.into_index(), None);
-        assert!(ptr.is_null());
-
-        // default to the null ptr
-        assert_eq!(Ptr::default(), Ptr::null());
-    }
-
-    #[test]
     fn slab_push_remove() {
         let mut slab = UnsafeSlab::new();
 
@@ -436,57 +349,57 @@ mod tests {
         assert_eq!(slab.capacity(), 0);
 
         // Push a single value
-        let index0 = slab.push(19384);
-        assert_eq!(unsafe { *slab.get_unchecked(index0) }, 19384);
+        let ptr0 = slab.push(19384);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr0) }, 19384);
 
         assert_eq!(slab.len(), 1);
         assert!(!slab.is_empty());
         assert!(slab.capacity() > 0);
 
         // Remove the only value in the slab
-        assert_eq!(unsafe { slab.remove(index0) }, 19384);
+        assert_eq!(unsafe { slab.remove(ptr0) }, 19384);
 
         assert_eq!(slab.len(), 0);
         assert!(slab.is_empty());
         assert!(slab.capacity() > 0);
 
         // Push another value
-        let index0 = slab.push(831783);
-        assert_eq!(unsafe { *slab.get_unchecked(index0) }, 831783);
+        let ptr0 = slab.push(831783);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr0) }, 831783);
 
         assert_eq!(slab.len(), 1);
         assert!(!slab.is_empty());
         assert!(slab.capacity() > 0);
 
         // Push a second value
-        let index1 = slab.push(57);
-        assert_eq!(unsafe { *slab.get_unchecked(index0) }, 831783);
-        assert_eq!(unsafe { *slab.get_unchecked(index1) }, 57);
+        let ptr1 = slab.push(57);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr0) }, 831783);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr1) }, 57);
 
         assert_eq!(slab.len(), 2);
         assert!(!slab.is_empty());
         assert!(slab.capacity() > 0);
 
-        // Remove the first value (second should still be available at the same index)
-        assert_eq!(unsafe { slab.remove(index0) }, 831783);
-        assert_eq!(unsafe { *slab.get_unchecked(index1) }, 57);
+        // Remove the first value (second should still be available at the same pointer)
+        assert_eq!(unsafe { slab.remove(ptr0) }, 831783);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr1) }, 57);
 
         assert_eq!(slab.len(), 1);
         assert!(!slab.is_empty());
         assert!(slab.capacity() > 0);
 
         // Push another value (may end up where the first value was)
-        let index2 = slab.push(999);
-        assert_eq!(unsafe { *slab.get_unchecked(index1) }, 57);
-        assert_eq!(unsafe { *slab.get_unchecked(index2) }, 999);
+        let ptr2 = slab.push(999);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr1) }, 57);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr2) }, 999);
 
         assert_eq!(slab.len(), 2);
         assert!(!slab.is_empty());
         assert!(slab.capacity() > 0);
 
         // Remove the second value (first value should remain)
-        assert_eq!(unsafe { slab.remove(index1) }, 57);
-        assert_eq!(unsafe { *slab.get_unchecked(index2) }, 999);
+        assert_eq!(unsafe { slab.remove(ptr1) }, 57);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr2) }, 999);
 
         assert_eq!(slab.len(), 1);
         assert!(!slab.is_empty());
@@ -499,24 +412,24 @@ mod tests {
     fn slab_stable_get() {
         let mut slab = UnsafeSlab::default();
 
-        let index0 = slab.push(-12);
-        assert_eq!(unsafe { *slab.get_unchecked(index0) }, -12);
+        let ptr0 = slab.push(-12);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr0) }, -12);
 
         // Push enough values for the capacity to change a few times
         let initial_capacity = slab.capacity();
-        let mut indexes = Vec::new();
+        let mut pointers = Vec::new();
         for i in 0.. {
-            indexes.push(slab.push(i as i32));
+            pointers.push(slab.push(i as i32));
             if slab.capacity() >= initial_capacity * 5 {
                 break;
             }
         }
 
-        // indexes returned from push should remain stable and usable even if the capacity changes
-        assert_eq!(unsafe { *slab.get_unchecked(index0) }, -12);
+        // pointers returned from push should remain stable and usable even if the capacity changes
+        assert_eq!(unsafe { *slab.get_unchecked(ptr0) }, -12);
 
-        for (i, index) in indexes.iter().copied().enumerate() {
-            assert_eq!(unsafe { *slab.get_unchecked(index) }, i as i32);
+        for (i, ptr) in pointers.iter().copied().enumerate() {
+            assert_eq!(unsafe { *slab.get_unchecked(ptr) }, i as i32);
         }
 
         // change the capacity again
@@ -525,23 +438,23 @@ mod tests {
         assert_eq!(slab.len(), slab.capacity());
 
         // check that the values are still the same
-        assert_eq!(unsafe { *slab.get_unchecked(index0) }, -12);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr0) }, -12);
 
-        for (i, index) in indexes.iter().copied().enumerate() {
-            assert_eq!(unsafe { *slab.get_unchecked(index) }, i as i32);
+        for (i, ptr) in pointers.iter().copied().enumerate() {
+            assert_eq!(unsafe { *slab.get_unchecked(ptr) }, i as i32);
         }
 
         // change the values
-        unsafe { *slab.get_unchecked_mut(index0) *= -1; }
+        unsafe { *slab.get_unchecked_mut(ptr0) *= -1; }
 
-        for &index in &indexes {
-            unsafe { *slab.get_unchecked_mut(index) *= -1; }
+        for &ptr in &pointers {
+            unsafe { *slab.get_unchecked_mut(ptr) *= -1; }
         }
 
         // values should be changed
-        assert_eq!(unsafe { *slab.get_unchecked(index0) }, 12);
-        for (i, index) in indexes.iter().copied().enumerate() {
-            assert_eq!(unsafe { *slab.get_unchecked(index) }, i as i32 * -1);
+        assert_eq!(unsafe { *slab.get_unchecked(ptr0) }, 12);
+        for (i, ptr) in pointers.iter().copied().enumerate() {
+            assert_eq!(unsafe { *slab.get_unchecked(ptr) }, i as i32 * -1);
         }
     }
 
@@ -566,11 +479,11 @@ mod tests {
         assert_eq!(slab.capacity(), capacity);
 
         // push 2 values and remove one, so that clear has to account for the free space
-        let index = slab.push("ddd".to_string());
+        let ptr = slab.push("ddd".to_string());
         slab.push("fff".to_string());
         let capacity = slab.capacity();
 
-        unsafe { slab.remove(index); }
+        unsafe { slab.remove(ptr); }
 
         assert!(!slab.is_empty());
         slab.clear();
@@ -578,12 +491,12 @@ mod tests {
         assert_eq!(slab.capacity(), capacity);
 
         // remove all values before clear
-        let index0 = slab.push("qqq".to_string());
-        let index1 = slab.push("555".to_string());
+        let ptr0 = slab.push("qqq".to_string());
+        let ptr1 = slab.push("555".to_string());
         let capacity = slab.capacity();
 
-        unsafe { slab.remove(index1); }
-        unsafe { slab.remove(index0); }
+        unsafe { slab.remove(ptr1); }
+        unsafe { slab.remove(ptr0); }
 
         assert!(slab.is_empty());
         slab.clear();
@@ -624,7 +537,7 @@ mod tests {
 
         let mut slab = UnsafeSlab::new();
 
-        let index0;
+        let ptr0;
         let weak_ref1;
         let weak_ref2;
         {
@@ -633,7 +546,7 @@ mod tests {
             weak_ref1 = Arc::downgrade(&value1);
             weak_ref2 = Arc::downgrade(&value2);
 
-            index0 = slab.push(value1);
+            ptr0 = slab.push(value1);
             slab.push(value2);
         }
 
@@ -643,7 +556,7 @@ mod tests {
         let weak_ref3;
         {
             // Drop one of the values via remove, but then reuse the space
-            unsafe { slab.remove(index0); }
+            unsafe { slab.remove(ptr0); }
 
             let value3 = Arc::new(3);
             weak_ref3 = Arc::downgrade(&value3);
@@ -687,9 +600,9 @@ mod tests {
         // push should not change capacity if capacity is greater than length
         assert!(slab.capacity() > slab.len());
 
-        let mut indexes = Vec::new();
+        let mut pointers = Vec::new();
         for i in 0.. {
-            indexes.push(slab.push(i.to_string()));
+            pointers.push(slab.push(i.to_string()));
 
             if slab.capacity() <= slab.len() {
                 break;
@@ -702,8 +615,8 @@ mod tests {
         // shrink to fit should not affect items
         slab.shrink_to_fit();
         let capacity = slab.capacity();
-        for (i, index) in indexes.iter().copied().enumerate() {
-            assert_eq!(unsafe { slab.get_unchecked(index) }, &i.to_string());
+        for (i, ptr) in pointers.iter().copied().enumerate() {
+            assert_eq!(unsafe { slab.get_unchecked(ptr) }, &i.to_string());
             assert_eq!(slab.capacity(), capacity);
         }
 
@@ -714,8 +627,8 @@ mod tests {
         assert_eq!(slab.capacity(), capacity);
 
         // remove should not change capacity
-        for index in indexes {
-            unsafe { slab.remove(index); }
+        for ptr in pointers {
+            unsafe { slab.remove(ptr); }
             assert_eq!(slab.capacity(), capacity);
         }
 
