@@ -93,6 +93,15 @@ unsafe impl AllocStrategy for ExponentialAlloc {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ptr(NonNull<()>);
 
+/// Safety: If the `T` that this pointer represents is not Send, `StableArena` will not be `Send`
+///   That means there is no danger is sending a `Ptr` between threads since it can't be used
+///   safely without its corresponding arena.
+unsafe impl Send for Ptr {}
+/// Safety: If the `T` that this pointer represents is not Sync, `StableArena` will not be `Send`
+///   That means there is no danger is sharing a `Ptr` between threads since it can't be used
+///   safely without its corresponding arena.
+unsafe impl Sync for Ptr {}
+
 /// An arena allocator that guarantees that the addresses produced remain usable regardless of how
 /// many items are added.
 ///
@@ -128,6 +137,11 @@ pub struct StableArena<T> {
     // https://github.com/rust-lang/rfcs/blob/master/text/0769-sound-generic-drop.md#phantom-data
     _marker: PhantomData<T>,
 }
+
+/// Safety: If the values being stored can be sent between threads, so can the arena
+unsafe impl<T: Send> Send for StableArena<T> {}
+/// Safety: If the values being stored can be shared between threads, so can the arena
+unsafe impl<T: Sync> Sync for StableArena<T> {}
 
 impl<T> Default for StableArena<T> {
     fn default() -> Self {
