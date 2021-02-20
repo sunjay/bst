@@ -1083,70 +1083,49 @@ mod tests {
                 keys.push(value);
             }
 
-            let expected = preorder(map.root()).into_iter();
+            let mut expected = Vec::with_capacity(map.len());
+            preorder(map.root(), &mut expected);
             let actual = map.iter_preorder();
-            for (expected, actual) in expected.zip(actual) {
+            for (expected, actual) in expected.into_iter().zip(actual) {
                 assert_eq!(expected, actual);
             }
 
-            let expected = inorder(map.root()).into_iter();
+            let mut expected = Vec::with_capacity(map.len());
+            inorder(map.root(), &mut expected);
             let actual = map.iter_inorder();
-            for (expected, actual) in expected.zip(actual) {
+            for (expected, actual) in expected.into_iter().zip(actual) {
                 assert_eq!(expected, actual);
             }
 
-            let expected = postorder(map.root()).into_iter();
+            let mut expected = Vec::with_capacity(map.len());
+            postorder(map.root(), &mut expected);
             let actual = map.iter_postorder();
-            for (expected, actual) in expected.zip(actual) {
+            for (expected, actual) in expected.into_iter().zip(actual) {
                 assert_eq!(expected, actual);
             }
         }
 
-        fn preorder<K, V>(node: Option<Node<K, V>>) -> Vec<(&K, &V)> {
-            match node {
-                Some(node) => {
-                    let mut items = Vec::new();
-
-                    items.push((node.key(), node.value()));
-                    items.extend(preorder(node.left()));
-                    items.extend(preorder(node.right()));
-
-                    items
-                },
-
-                None => Vec::new(),
+        fn preorder<'a, K, V>(node: Option<Node<'a, K, V>>, items: &mut Vec<(&'a K, &'a V)>) {
+            if let Some(node) = node {
+                items.push((node.key(), node.value()));
+                preorder(node.left(), items);
+                preorder(node.right(), items);
             }
         }
 
-        fn inorder<K, V>(node: Option<Node<K, V>>) -> Vec<(&K, &V)> {
-            match node {
-                Some(node) => {
-                    let mut items = Vec::new();
-
-                    items.extend(inorder(node.left()));
-                    items.push((node.key(), node.value()));
-                    items.extend(inorder(node.right()));
-
-                    items
-                },
-
-                None => Vec::new(),
+        fn inorder<'a, K, V>(node: Option<Node<'a, K, V>>, items: &mut Vec<(&'a K, &'a V)>) {
+            if let Some(node) = node {
+                inorder(node.left(), items);
+                items.push((node.key(), node.value()));
+                inorder(node.right(), items);
             }
         }
 
-        fn postorder<K, V>(node: Option<Node<K, V>>) -> Vec<(&K, &V)> {
-            match node {
-                Some(node) => {
-                    let mut items = Vec::new();
-
-                    items.extend(postorder(node.left()));
-                    items.extend(postorder(node.right()));
-                    items.push((node.key(), node.value()));
-
-                    items
-                },
-
-                None => Vec::new(),
+        fn postorder<'a, K, V>(node: Option<Node<'a, K, V>>, items: &mut Vec<(&'a K, &'a V)>) {
+            if let Some(node) = node {
+                postorder(node.left(), items);
+                postorder(node.right(), items);
+                items.push((node.key(), node.value()));
             }
         }
     }
