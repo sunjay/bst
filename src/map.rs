@@ -1044,6 +1044,114 @@ mod tests {
     }
 
     #[test]
+    fn test_random_traversals() {
+        cfg_if::cfg_if! {
+            if #[cfg(miri)] {
+                const TEST_CASES: usize = 128;
+                const MAX_TREE_SIZE: usize = 10;
+
+                (0..TEST_CASES).into_iter().for_each(|_| test_case());
+
+            } else {
+                use rayon::prelude::*;
+
+                const TEST_CASES: usize = 8192;
+                const MAX_TREE_SIZE: usize = 50;
+
+                (0..TEST_CASES).into_par_iter().for_each(|_| test_case());
+            }
+        }
+
+        fn test_case() {
+            let mut map = BSTMap::new();
+            let mut keys = Vec::with_capacity(MAX_TREE_SIZE);
+
+            let seed = thread_rng().gen();
+            println!("Seed: {:?}", seed);
+            let mut rng = StdRng::seed_from_u64(seed);
+            for _ in 0..rng.gen_range(0..=MAX_TREE_SIZE) {
+                // Remove a random value occasionally
+                if matches!(rng.gen_range(1..=100), 1..=10) {
+                    if let Some(key) = keys.choose(&mut rng) {
+                        map.remove(key);
+                    }
+                }
+
+                // Insert a random value
+                let value = rng.gen_range(0usize..=MAX_TREE_SIZE*10);
+                map.insert(value.clone(), value);
+                keys.push(value);
+            }
+
+            let expected = preorder(map.root()).into_iter();
+            let actual = map.iter_preorder();
+            for (expected, actual) in expected.zip(actual) {
+                assert_eq!(expected, actual);
+            }
+
+            let expected = inorder(map.root()).into_iter();
+            let actual = map.iter_inorder();
+            for (expected, actual) in expected.zip(actual) {
+                assert_eq!(expected, actual);
+            }
+
+            let expected = postorder(map.root()).into_iter();
+            let actual = map.iter_postorder();
+            for (expected, actual) in expected.zip(actual) {
+                assert_eq!(expected, actual);
+            }
+        }
+
+        fn preorder<K, V>(node: Option<Node<K, V>>) -> Vec<(&K, &V)> {
+            match node {
+                Some(node) => {
+                    let mut items = Vec::new();
+
+                    items.push((node.key(), node.value()));
+                    items.extend(preorder(node.left()));
+                    items.extend(preorder(node.right()));
+
+                    items
+                },
+
+                None => Vec::new(),
+            }
+        }
+
+        fn inorder<K, V>(node: Option<Node<K, V>>) -> Vec<(&K, &V)> {
+            match node {
+                Some(node) => {
+                    let mut items = Vec::new();
+
+                    items.extend(inorder(node.left()));
+                    items.push((node.key(), node.value()));
+                    items.extend(inorder(node.right()));
+
+                    items
+                },
+
+                None => Vec::new(),
+            }
+        }
+
+        fn postorder<K, V>(node: Option<Node<K, V>>) -> Vec<(&K, &V)> {
+            match node {
+                Some(node) => {
+                    let mut items = Vec::new();
+
+                    items.extend(postorder(node.left()));
+                    items.extend(postorder(node.right()));
+                    items.push((node.key(), node.value()));
+
+                    items
+                },
+
+                None => Vec::new(),
+            }
+        }
+    }
+
+    #[test]
     fn test_map_remove_traverse() {
         //TODO: This test is brittle and relies on insertion behaviour. Really we want to encode the
         // shape of the tree in the test itself. Maybe with some unsafe `with_tree_structure`
