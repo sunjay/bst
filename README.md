@@ -77,9 +77,9 @@ fn main() {
     - [x] `iter_preorder` - pre-order traversal
     - [x] `iter_inorder` - in-order traversal
     - [x] `iter_postorder` - post-order traversal
-    - [ ] `iter_mut_preorder` - pre-order traversal (mutable)
-    - [ ] `iter_mut_inorder` - in-order traversal (mutable)
-    - [ ] `iter_mut_postorder` - post-order traversal (mutable)
+    - [x] `iter_mut_preorder` - pre-order traversal (mutable)
+    - [x] `iter_mut_inorder` - in-order traversal (mutable)
+    - [x] `iter_mut_postorder` - post-order traversal (mutable)
     - [ ] `into_iter_preorder` - pre-order traversal (owned)
     - [ ] `into_iter_inorder` - in-order traversal (owned)
     - [ ] `into_iter_postorder` - post-order traversal (owned)

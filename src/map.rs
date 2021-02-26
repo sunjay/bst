@@ -631,18 +631,18 @@ impl<K: Ord, V> BSTMap<K, V> {
     }
 
     /// Performs a pre-order traversal of the tree
-    pub fn iter_mut_preorder(&mut self) -> impl Iterator<Item=(&K, &mut V)> {
-        std::iter::from_fn(|| todo!())
+    pub fn iter_mut_preorder(&mut self) -> IterMutPreorder<K, V> {
+        IterMutPreorder::new(&mut self.nodes, self.root)
     }
 
     /// Performs an in-order traversal of the tree
-    pub fn iter_mut_inorder(&mut self) -> impl Iterator<Item=(&K, &mut V)> {
-        std::iter::from_fn(|| todo!())
+    pub fn iter_mut_inorder(&mut self) -> IterMutInorder<K, V> {
+        IterMutInorder::new(&mut self.nodes, self.root)
     }
 
     /// Performs a post-order traversal of the tree
-    pub fn iter_mut_postorder(&mut self) -> impl Iterator<Item=(&K, &mut V)> {
-        std::iter::from_fn(|| todo!())
+    pub fn iter_mut_postorder(&mut self) -> IterMutPostorder<K, V> {
+        IterMutPostorder::new(&mut self.nodes, self.root)
     }
 
     /// Returns the root node of the tree, or `None` if the tree is empty
@@ -1040,6 +1040,16 @@ mod tests {
         assert_eq!(&values, &[1, 2, 3, 4, 5]);
 
         let values: Vec<_> = map.iter_postorder().map(|(k, _)| *k).collect();
+        assert_eq!(&values, &[1, 3, 2, 5, 4]);
+
+        // Mutable iterators
+        let values: Vec<_> = map.iter_mut_preorder().map(|(k, _)| *k).collect();
+        assert_eq!(&values, &[4, 2, 1, 3, 5]);
+
+        let values: Vec<_> = map.iter_mut_inorder().map(|(k, _)| *k).collect();
+        assert_eq!(&values, &[1, 2, 3, 4, 5]);
+
+        let values: Vec<_> = map.iter_mut_postorder().map(|(k, _)| *k).collect();
         assert_eq!(&values, &[1, 3, 2, 5, 4]);
     }
 
