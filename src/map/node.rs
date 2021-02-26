@@ -192,7 +192,7 @@ impl<'a, K, V> NodeMut<'a, K, V> {
     }
 
     /// Returns the left child node (subtree) of this node, if any
-    pub fn left(&mut self) -> Option<Self> {
+    pub fn left(&'a mut self) -> Option<Self> {
         // Safety: Nodes only contain pointers to other nodes within `self.nodes`
         //   Importantly, those pointers are to other *distinct* nodes, so there will never be any
         //   overlap (we know they are distinct because trees have no cycles by definition)
@@ -200,7 +200,23 @@ impl<'a, K, V> NodeMut<'a, K, V> {
     }
 
     /// Returns the right child node (subtree) of this node, if any
-    pub fn right(&mut self) -> Option<Self> {
+    pub fn right(&'a mut self) -> Option<Self> {
+        // Safety: Nodes only contain pointers to other nodes within `self.nodes`
+        //   Importantly, those pointers are to other *distinct* nodes, so there will never be any
+        //   overlap (we know they are distinct because trees have no cycles by definition)
+        self.node.right.map(move |ptr| unsafe { Self::new(self.nodes, ptr) })
+    }
+
+    /// Returns the left child node (subtree) of this node, if any
+    pub fn into_left(self) -> Option<Self> {
+        // Safety: Nodes only contain pointers to other nodes within `self.nodes`
+        //   Importantly, those pointers are to other *distinct* nodes, so there will never be any
+        //   overlap (we know they are distinct because trees have no cycles by definition)
+        self.node.left.map(move |ptr| unsafe { Self::new(self.nodes, ptr) })
+    }
+
+    /// Returns the right child node (subtree) of this node, if any
+    pub fn into_right(self) -> Option<Self> {
         // Safety: Nodes only contain pointers to other nodes within `self.nodes`
         //   Importantly, those pointers are to other *distinct* nodes, so there will never be any
         //   overlap (we know they are distinct because trees have no cycles by definition)

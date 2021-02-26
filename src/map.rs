@@ -301,10 +301,10 @@ impl<K: Ord, V> BSTMap<K, V> {
               Q: Ord + ?Sized,
     {
         let mut current = self.root_mut();
-        while let Some(mut node) = current.take() {
+        while let Some(node) = current.take() {
             match key.cmp(node.key().borrow()) {
-                Ordering::Less => current = node.left(),
-                Ordering::Greater => current = node.right(),
+                Ordering::Less => current = node.into_left(),
+                Ordering::Greater => current = node.into_right(),
                 Ordering::Equal => return Some(node.into_value_mut()),
             }
         }
@@ -374,10 +374,10 @@ impl<K: Ord, V> BSTMap<K, V> {
               Q: Ord + ?Sized,
     {
         let mut current = self.root_mut();
-        while let Some(mut node) = current {
+        while let Some(node) = current {
             match key.cmp(node.key().borrow()) {
-                Ordering::Less => current = node.left(),
-                Ordering::Greater => current = node.right(),
+                Ordering::Less => current = node.into_left(),
+                Ordering::Greater => current = node.into_right(),
                 Ordering::Equal => return Some(node.into_entry_mut()),
             }
         }
@@ -422,7 +422,7 @@ impl<K: Ord, V> BSTMap<K, V> {
                         node.push_left(key, value);
                         break;
                     }
-                    current = node.left();
+                    current = node.into_left();
                 },
 
                 Ordering::Greater => {
@@ -431,7 +431,7 @@ impl<K: Ord, V> BSTMap<K, V> {
                         node.push_right(key, value);
                         break;
                     }
-                    current = node.right();
+                    current = node.into_right();
                 },
 
                 Ordering::Equal => {
