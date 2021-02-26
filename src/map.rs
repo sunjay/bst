@@ -301,7 +301,7 @@ impl<K: Ord, V> BSTMap<K, V> {
               Q: Ord + ?Sized,
     {
         let mut current = self.root_mut();
-        while let Some(node) = current.take() {
+        while let Some(mut node) = current.take() {
             match key.cmp(node.key().borrow()) {
                 Ordering::Less => current = node.left(),
                 Ordering::Greater => current = node.right(),

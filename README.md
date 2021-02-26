@@ -85,7 +85,6 @@ fn main() {
     - [ ] `into_iter_postorder` - post-order traversal (owned)
     - [x] `root` - returns the root node of the tree and allows you to traverse all nodes
     - [x] `root_mut` - returns the root node of the tree and allows you to traverse all nodes (mutable)
-        - [ ] fix `left` and `right` methods so they take `&mut self` instead of `self`
     - [x] `FromIterator` trait
     - [x] `Extend` trait
     - [ ] `append`
