@@ -55,6 +55,17 @@ fn main() {
 }
 ```
 
+## Safety & Correctness
+
+Like most low-level, high-performance data structures written in Rust, this crate makes use of quite
+a bit of unsafe Rust code. None of the unsafe Rust code is intended to produce any
+unsoundness/undefined behavior or result in any memory unsafety. We have extensively tested the code
+with unit tests and [miri], but none of that guarantees that no mistakes have been made. The code
+has not been audited and every edge case may not be accounted for. Please keep all of this in mind
+if you decide to use this code in your project or as a reference.
+
+[miri]: https://github.com/rust-lang/miri
+
 ## Implementation Progress
 
 - [x] `BSTMap`
