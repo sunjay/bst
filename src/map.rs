@@ -346,6 +346,45 @@ impl<K: Ord, V> BSTMap<K, V> {
         None
     }
 
+    /// Returns a key-value pair corresponding to the given key, or `None` if no such key exists in
+    /// the binary search tree
+    ///
+    /// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
+    /// form must match the ordering on the key type.
+    ///
+    /// Time complexity: `O(log n)`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bst::BSTMap;
+    ///
+    /// let mut map = BSTMap::new();
+    /// map.insert(1, "a");
+    /// assert_eq!(map.get_entry_mut(&1), Some((&1, &mut "a")));
+    /// assert_eq!(map.get_entry_mut(&2), None);
+    ///
+    /// let (key, value) = map.get_entry_mut(&1).unwrap();
+    /// assert_eq!(key, &1);
+    /// *value = "abc";
+    /// assert_eq!(map.get(&1), Some(&"abc"));
+    /// ```
+    pub fn get_entry_mut<Q>(&mut self, key: &Q) -> Option<(&K, &mut V)>
+        where K: Borrow<Q>,
+              Q: Ord + ?Sized,
+    {
+        let mut current = self.root_mut();
+        while let Some(mut node) = current {
+            match key.cmp(node.key().borrow()) {
+                Ordering::Less => current = node.left(),
+                Ordering::Greater => current = node.right(),
+                Ordering::Equal => return Some(node.into_entry_mut()),
+            }
+        }
+
+        None
+    }
+
     /// Inserts a new value into the binary search tree
     ///
     /// Returns the previous value if the key was already present in an

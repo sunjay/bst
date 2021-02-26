@@ -66,8 +66,8 @@ fn main() {
     - [x] `len` / `is_empty`
     - [x] `get` / `get_mut`
     - [x] `get_entry` - returns `Option<(&K, &V)>`
-    - [ ] `get_entry_mut` - returns `Option<(&K, &mut V)>`
-    - [ ] `entry`
+    - [x] `get_entry_mut` - returns `Option<(&K, &mut V)>`
+    - [ ] `entry` - entry API similar to `HashMap`
     - [x] `contains_key`
     - [x] `insert`
     - [x] `remove`

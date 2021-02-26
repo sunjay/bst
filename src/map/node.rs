@@ -176,6 +176,11 @@ impl<'a, K, V> NodeMut<'a, K, V> {
         &mut self.node.value
     }
 
+    /// Returns the (key, mutable value) pair of this node, consuming the node in the process
+    pub(crate) fn into_entry_mut(self) -> (&'a K, &'a mut V) {
+        (&self.node.key, &mut self.node.value)
+    }
+
     /// Returns true if this node has a left subtree
     pub fn has_left(&self) -> bool {
         self.node.left.is_some()
